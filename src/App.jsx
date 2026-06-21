@@ -314,17 +314,87 @@ export default function App({ session }) {
   function WeekForm() {
     const totalKm = wForm.days.reduce((s, d) => s + (Number(d) || 0), 0);
     const perKm = totalKm > 0 && wForm.amount > 0 ? Number(wForm.amount) / totalKm : 0;
+    const [csvInfo, setCsvInfo] = useState(null); // { km, fuelCost, startDate, endDate, deviceName }
+    const [csvError, setCsvError] = useState("");
+
     function dayDate(i) {
       const d = new Date(wForm.weekStart);
       d.setDate(d.getDate() + i);
       return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
     }
+
+    function handleCsvUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      setCsvError("");
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const text = evt.target.result;
+          // SinoTrack export: header row + 1 data row, tab/comma separated, BOM possible
+          const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim());
+          if (lines.length < 2) throw new Error("No data row found");
+          const headers = lines[0].split(",").map(h => h.trim().replace(/^\t/, ""));
+          const values = lines[1].split(",").map(v => v.trim().replace(/^\t/, ""));
+          const row = {};
+          headers.forEach((h, i) => { row[h] = values[i]; });
+
+          const km = parseFloat(row["Drive mileage(km)"]);
+          const fuelCost = parseFloat(row["Cost(Dollar)"]);
+          const startDate = row["Start time"];
+          const endDate = row["End time"];
+          const deviceName = row["Device name"];
+
+          if (isNaN(km)) throw new Error("Couldn't find mileage in this file");
+
+          setCsvInfo({ km, fuelCost, startDate, endDate, deviceName });
+          // Put the total into day 0 (Mon) and clear the rest, since SinoTrack gives one range total
+          setWForm(f => ({ ...f, days: [String(km), "", "", "", "", "", ""] }));
+        } catch (err) {
+          setCsvError("Couldn't read that file — make sure it's the SinoTrack mileage export CSV");
+        }
+      };
+      reader.readAsText(file);
+    }
+
     return (
       <div style={{ ...S.card, maxWidth: 560, marginBottom: 20, borderColor: C.cyan + "55" }}>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontWeight: 700, color: C.cyan, fontSize: 15 }}>Log This Week</div>
           <div style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{fmtWeekRange(wForm.weekStart)}</div>
         </div>
+
+        {/* SinoTrack CSV import */}
+        <div style={{ background: C.faint, borderRadius: 8, padding: "12px 14px", marginBottom: 16, border: `1px dashed ${C.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: csvInfo ? 10 : 0 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Import from SinoTrack</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Set Mon–Sun range on SinoTrack, download CSV, upload here</div>
+            </div>
+            <label style={{ ...S.btn(C.cyan), padding: "7px 14px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+              Choose File
+              <input type="file" accept=".csv" onChange={handleCsvUpload} style={{ display: "none" }} />
+            </label>
+          </div>
+          {csvError && <div style={{ color: C.red, fontSize: 11, marginTop: 8 }}>{csvError}</div>}
+          {csvInfo && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 12, color: C.cyan, fontWeight: 700, marginBottom: 4 }}>
+                ✓ {csvInfo.deviceName} — {csvInfo.km.toFixed(1)} km imported
+              </div>
+              <div style={{ fontSize: 10, color: C.muted }}>
+                {csvInfo.startDate} → {csvInfo.endDate}
+              </div>
+              {!isNaN(csvInfo.fuelCost) && (
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+                  SinoTrack estimates {fmt(csvInfo.fuelCost)} fuel cost for this range — this is a calculated
+                  estimate, not a real receipt, so it's shown for reference only and not auto-filled into your costs.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div style={{ ...S.row, marginBottom: 16 }}>
           <div style={{ flex: 1 }}>
             <label style={S.label}>Car</label>
@@ -341,7 +411,7 @@ export default function App({ session }) {
             <input type="date" style={{ ...S.input, color: C.muted, cursor: "not-allowed" }} value={getSundayStr(wForm.weekStart)} readOnly />
           </div>
         </div>
-        <label style={S.label}>Daily Mileage — tap each day as you read SinoTrack</label>
+        <label style={S.label}>Daily Mileage — tap each day as you read SinoTrack, or use the import above</label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 12 }}>
           {DAYS.map((day, i) => {
             const isActive = activeDay === i;
