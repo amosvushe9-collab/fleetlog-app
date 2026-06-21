@@ -636,16 +636,81 @@ function ServiceRecordForm({ car, alerts, form, setForm, syncing, uploading, onS
 // PAGE COMPONENTS
 // ════════════════════════════════════════════════════════════════════════════
 
-function Dashboard({ cars, weeks, carStats, allAlerts, docAlerts, carName, setView }) {
-  const totKm  = carStats.reduce((s, c) => s + c.totalKm, 0);
-  const totRec = carStats.reduce((s, c) => s + c.totalReceived, 0);
-  const totCost= carStats.reduce((s, c) => s + c.totalCosts, 0);
+function monthKey(dateStr) {
+  return dateStr ? dateStr.slice(0, 7) : ""; // "YYYY-MM"
+}
+function monthLabel(key) {
+  if (key === "all") return "All Time";
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
+function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, carName, setView }) {
+  // Build the list of months that actually have data, newest first, plus "All Time"
+  const availableMonths = useMemo(() => {
+    const keys = new Set();
+    weeks.forEach(w => keys.add(monthKey(w.week_start)));
+    costs.forEach(c => keys.add(monthKey(c.date)));
+    const sorted = [...keys].filter(Boolean).sort().reverse();
+    return ["all", ...sorted];
+  }, [weeks, costs]);
+
+  const currentMonthKey = monthKey(today());
+  const [selectedMonth, setSelectedMonth] = useState(
+    availableMonths.includes(currentMonthKey) ? currentMonthKey : (availableMonths[0] || "all")
+  );
+
+  const monthWeeks = selectedMonth === "all" ? weeks : weeks.filter(w => monthKey(w.week_start) === selectedMonth);
+  const monthCosts = selectedMonth === "all" ? costs : costs.filter(c => monthKey(c.date) === selectedMonth);
+
+  const monthCarStats = useMemo(() => cars.map(car => {
+    const cw = monthWeeks.filter(w => w.car_id === car.id);
+    const cc = monthCosts.filter(c => c.car_id === car.id);
+    const totalKm       = cw.reduce((s, w) => s + Number(w.km || 0), 0);
+    const totalReceived = cw.filter(w => w.paid).reduce((s, w) => s + Number(w.amount || 0), 0);
+    const totalCosts    = cc.reduce((s, c) => s + Number(c.amount || 0), 0);
+    const net           = totalReceived - totalCosts;
+    const perKm         = totalKm > 0 ? totalReceived / totalKm : 0;
+    const avgWeeklyKm   = cw.length > 0 ? totalKm / cw.length : 0;
+    const unpaidCount   = cw.filter(w => !w.paid).length;
+    const unpaidAmt     = cw.filter(w => !w.paid).reduce((s, w) => s + Number(w.amount || 0), 0);
+    return { car, totalKm, totalReceived, totalCosts, net, perKm, avgWeeklyKm, unpaidCount, unpaidAmt, weekCount: cw.length, costCount: cc.length };
+  }), [cars, monthWeeks, monthCosts]);
+
+  const totKm  = monthCarStats.reduce((s, c) => s + c.totalKm, 0);
+  const totRec = monthCarStats.reduce((s, c) => s + c.totalReceived, 0);
+  const totCost= monthCarStats.reduce((s, c) => s + c.totalCosts, 0);
   const totNet = totRec - totCost;
+  const totWeekCount = monthCarStats.reduce((s, c) => s + c.weekCount, 0);
+  const totCostCount = monthCarStats.reduce((s, c) => s + c.costCount, 0);
+
+  // Flag months that look like they're missing data — earnings logged but zero costs at all,
+  // which for an operating fleet usually means costs weren't entered, not that there were none.
+  const looksIncomplete = selectedMonth !== "all" && totWeekCount > 0 && totCostCount === 0;
 
   return (
     <div style={S.page}>
-      <div style={S.title}>Fleet Dashboard</div>
-      <div style={S.sub}>{cars.length} cars · all-time</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={S.title}>Fleet Dashboard</div>
+          <div style={S.sub}>{cars.length} cars · {monthLabel(selectedMonth)}</div>
+        </div>
+        <select
+          style={{ ...S.input, width: "auto", minWidth: 160 }}
+          value={selectedMonth}
+          onChange={e => setSelectedMonth(e.target.value)}
+        >
+          {availableMonths.map(k => <option key={k} value={k}>{monthLabel(k)}</option>)}
+        </select>
+      </div>
+
+      {looksIncomplete && (
+        <div style={{ ...S.card, borderColor: C.amber, marginBottom: 16, fontSize: 12, color: C.amber }}>
+          ℹ {monthLabel(selectedMonth)} has {totWeekCount} week{totWeekCount !== 1 ? "s" : ""} logged but no costs recorded.
+          If you had any expenses this month, they're probably just not entered yet — these numbers may look
+          better than reality until they are.
+        </div>
+      )}
 
       {(allAlerts.length > 0 || docAlerts.length > 0) && (
         <div style={{ ...S.card, borderColor: (allAlerts.some(a => a.status === "due") || docAlerts.some(d => d.level === "expired" || d.level === "critical")) ? C.red : C.amber, marginBottom: 16 }}>
@@ -683,10 +748,9 @@ function Dashboard({ cars, weeks, carStats, allAlerts, docAlerts, carName, setVi
       </div>
 
       <div style={{ ...S.row, marginBottom: 16 }}>
-        {carStats.map(({ car, totalKm, totalReceived, totalCosts, net, perKm, avgWeeklyKm, unpaidCount, unpaidAmt }) => {
-          const carKm = weeks.filter(w => w.car_id === car.id).reduce((s, w) => s + Number(w.km), 0);
-          const odo = currentOdometer(car, weeks);
-          const maxPK = Math.max(...carStats.map(s => s.perKm), 0.001);
+        {monthCarStats.map(({ car, totalKm, totalReceived, totalCosts, net, perKm, avgWeeklyKm, unpaidCount, unpaidAmt }) => {
+          const odo = currentOdometer(car, weeks); // odometer is always true total-to-date, not month-scoped
+          const maxPK = Math.max(...monthCarStats.map(s => s.perKm), 0.001);
           return (
             <div key={car.id} style={{ ...S.card, flex: 1, minWidth: 240, borderTop: `3px solid ${car.color}` }}>
               <div style={{ fontWeight: 700, color: car.color, fontSize: 15, marginBottom: 12 }}>{car.name}</div>
@@ -714,7 +778,8 @@ function Dashboard({ cars, weeks, carStats, allAlerts, docAlerts, carName, setVi
       </div>
 
       <div style={S.card}>
-        <div style={{ fontWeight: 600, marginBottom: 14 }}>Weekly Mileage — Last 12 Weeks</div>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>Weekly Mileage — Last 12 Weeks</div>
+        <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Always shows recent trend regardless of the month selected above</div>
         <WeeklyBars weeks={weeks} cars={cars} />
       </div>
     </div>
@@ -1410,7 +1475,7 @@ export default function App({ session }) {
       </header>
 
       {view === "dashboard" && (
-        <Dashboard cars={cars} weeks={weeks} carStats={carStats} allAlerts={allAlerts} docAlerts={docAlerts} carName={carName} setView={setView} />
+        <Dashboard cars={cars} weeks={weeks} costs={costs} allAlerts={allAlerts} docAlerts={docAlerts} carName={carName} setView={setView} />
       )}
 
       {view === "weekly" && (
