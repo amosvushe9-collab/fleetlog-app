@@ -560,6 +560,78 @@ function OdometerEditForm({ car, value, setValue, syncing, onSave, onCancel }) {
   );
 }
 
+function ServiceRecordForm({ car, alerts, form, setForm, syncing, uploading, onSave, onCancel }) {
+  const fileInputId = `service-photo-${car.id}`;
+
+  function handlePhotoSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setForm(f => ({ ...f, photoFile: file, photoPreview: URL.createObjectURL(file) }));
+  }
+
+  return (
+    <div style={{ ...S.card, maxWidth: 460, marginBottom: 14, borderColor: C.green + "44" }}>
+      <div style={{ fontWeight: 700, color: C.green, marginBottom: 14 }}>Add Service Record — {car.name}</div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={S.label}>Photo of Service Sticker</label>
+        {form.photoPreview ? (
+          <div style={{ position: "relative", marginBottom: 8 }}>
+            <img src={form.photoPreview} alt="Service sticker" style={{ width: "100%", maxHeight: 220, objectFit: "contain", borderRadius: 8, background: C.faint, border: `1px solid ${C.border}` }} />
+            <button
+              onClick={() => setForm(f => ({ ...f, photoFile: null, photoPreview: null }))}
+              style={{ position: "absolute", top: 8, right: 8, background: "#000a", color: "#fff", border: "none", borderRadius: 99, width: 26, height: 26, cursor: "pointer", fontSize: 14 }}
+            >✕</button>
+          </div>
+        ) : (
+          <label htmlFor={fileInputId} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, height: 120, border: `1px dashed ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.muted, fontSize: 12 }}>
+            <span style={{ fontSize: 22 }}>📷</span>
+            Tap to take or choose a photo
+          </label>
+        )}
+        <input id={fileInputId} type="file" accept="image/*" capture="environment" onChange={handlePhotoSelect} style={{ display: "none" }} />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={S.label}>What was done</label>
+        <select style={S.input} value={form.alertId} onChange={e => setForm(f => ({ ...f, alertId: e.target.value }))}>
+          {alerts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+          <option value="">Other / not listed</option>
+        </select>
+      </div>
+
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Date</label>
+          <input type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Odometer at Service (km)</label>
+          <input type="number" style={S.input} value={form.odometerKm} onChange={e => setForm(f => ({ ...f, odometerKm: e.target.value }))} />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={S.label}>Notes (optional)</label>
+        <input style={S.input} placeholder="e.g. synthetic oil, garage name..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+      </div>
+
+      {form.alertId && (
+        <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
+          Saving this will also mark "{alerts.find(a => a.id === form.alertId)?.label}" as done at {form.odometerKm || "0"} km.
+        </div>
+      )}
+
+      <div style={S.row}>
+        <button style={S.btn(C.green)} onClick={onSave} disabled={syncing || uploading}>
+          {uploading ? "Uploading photo..." : syncing ? "Saving..." : "Save Record"}
+        </button>
+        <button style={S.ghost} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE COMPONENTS
 // ════════════════════════════════════════════════════════════════════════════
@@ -788,19 +860,46 @@ function Costs({
   );
 }
 
-function Maintenance({ cars, weeks, markDone }) {
+function Maintenance({
+  cars, weeks, markDone, serviceRecords,
+  showServiceForm, setShowServiceForm, serviceForm, setServiceForm,
+  syncing, uploadingPhoto, onSaveServiceRecord, onDeleteServiceRecord,
+}) {
   return (
     <div style={S.page}>
       <div style={S.title}>Maintenance</div>
-      <div style={S.sub}>Mileage-based service reminders</div>
+      <div style={S.sub}>Mileage-based service reminders + service book</div>
       {cars.map(car => {
-        const km = weeks.filter(w => w.car_id === car.id).reduce((s, w) => s + Number(w.km), 0);
+        const km = currentOdometer(car, weeks);
+        const carRecords = serviceRecords.filter(r => r.car_id === car.id).sort((a, b) => new Date(b.date) - new Date(a.date));
+        const isAdding = showServiceForm === car.id;
         return (
           <div key={car.id} style={{ ...S.card, marginBottom: 16, borderTop: `3px solid ${car.color}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
               <span style={{ fontWeight: 700, color: car.color, fontSize: 15 }}>{car.name}</span>
-              <span style={{ fontSize: 12, color: C.muted }}>Tracked: <strong style={{ color: C.cyan }}>{fmtKm(km)}</strong></span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 12, color: C.muted }}>Odometer: <strong style={{ color: C.cyan }}>{fmtKm(km)}</strong></span>
+                <button
+                  style={{ ...S.btn(C.green), padding: "5px 12px", fontSize: 11 }}
+                  onClick={() => {
+                    setShowServiceForm(isAdding ? null : car.id);
+                    setServiceForm({ alertId: car.alerts?.[0]?.id || "", date: today(), odometerKm: String(km), notes: "", photoFile: null, photoPreview: null });
+                  }}
+                >
+                  {isAdding ? "Cancel" : "📷 Add Service Record"}
+                </button>
+              </div>
             </div>
+
+            {isAdding && (
+              <ServiceRecordForm
+                car={car} alerts={car.alerts || []} form={serviceForm} setForm={setServiceForm}
+                syncing={syncing} uploading={uploadingPhoto}
+                onSave={() => onSaveServiceRecord(car)}
+                onCancel={() => setShowServiceForm(null)}
+              />
+            )}
+
             {(car.alerts || []).map(a => {
               const kmSince = km - a.lastDoneKm;
               const remaining = a.intervalKm - kmSince;
@@ -815,6 +914,33 @@ function Maintenance({ cars, weeks, markDone }) {
                 </div>
               );
             })}
+
+            {carRecords.length > 0 && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10 }}>Service History</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {carRecords.map(r => (
+                    <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "center", background: C.faint, borderRadius: 8, padding: 8 }}>
+                      {r.photo_url ? (
+                        <a href={r.photo_url} target="_blank" rel="noopener noreferrer">
+                          <img src={r.photo_url} alt="Service sticker" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, border: `1px solid ${C.border}` }} />
+                        </a>
+                      ) : (
+                        <div style={{ width: 48, height: 48, borderRadius: 6, background: C.border, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📋</div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{r.alert_label || "Service"} — {fmtKm(r.odometer_km)}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>
+                          {new Date(r.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          {r.notes ? ` · ${r.notes}` : ""}
+                        </div>
+                      </div>
+                      <button onClick={() => onDeleteServiceRecord(r.id)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
@@ -924,8 +1050,10 @@ export default function App({ session }) {
   const [weeks, setWeeks] = useState([]);
   const [costs, setCosts] = useState([]);
   const [docs, setDocs]   = useState([]);
+  const [serviceRecords, setServiceRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const [view, setView] = useState("dashboard");
   const [filterCar, setFilterCar] = useState("all");
@@ -948,6 +1076,8 @@ export default function App({ session }) {
   const [newCar, setNewCar] = useState({ name: "", color: C.cyan, weeklyRate: 130, odometerBaseline: "", odometerDate: today() });
   const [editingOdoCarId, setEditingOdoCarId] = useState(null);
   const [odoForm, setOdoForm] = useState({ reading: "", date: today() });
+  const [showServiceForm, setShowServiceForm] = useState(null); // holds the car.id currently adding a record, or null
+  const [serviceForm, setServiceForm] = useState({ alertId: "", date: today(), odometerKm: "", notes: "", photoFile: null, photoPreview: null });
 
   function toast_(m) { setToast(m); setTimeout(() => setToast(""), 2500); }
   const carColor = (id) => cars.find(c => c.id === id)?.color || C.muted;
@@ -957,16 +1087,18 @@ export default function App({ session }) {
   useEffect(() => {
     async function fetchAll() {
       setLoading(true);
-      const [carsRes, weeksRes, costsRes, docsRes] = await Promise.all([
+      const [carsRes, weeksRes, costsRes, docsRes, serviceRes] = await Promise.all([
         supabase.from("cars").select("*").eq("user_id", userId).order("created_at"),
         supabase.from("weeks").select("*").eq("user_id", userId).order("week_start", { ascending: false }),
         supabase.from("costs").select("*").eq("user_id", userId).order("date", { ascending: false }),
         supabase.from("docs").select("*").eq("user_id", userId).order("expiry"),
+        supabase.from("service_records").select("*").eq("user_id", userId).order("date", { ascending: false }),
       ]);
       if (carsRes.data)  setCars(carsRes.data);
       if (weeksRes.data) setWeeks(weeksRes.data);
       if (costsRes.data) setCosts(costsRes.data);
       if (docsRes.data)  setDocs(docsRes.data);
+      if (serviceRes.data) setServiceRecords(serviceRes.data);
       setLoading(false);
     }
     fetchAll();
@@ -998,7 +1130,7 @@ export default function App({ session }) {
   const allAlerts = useMemo(() => {
     const out = [];
     cars.forEach(car => {
-      const km = weeks.filter(w => w.car_id === car.id).reduce((s, w) => s + Number(w.km || 0), 0);
+      const km = currentOdometer(car, weeks);
       (car.alerts || []).forEach(a => {
         const kmSince = km - a.lastDoneKm;
         const remaining = a.intervalKm - kmSince;
@@ -1155,11 +1287,79 @@ export default function App({ session }) {
   }
 
   async function markDone(carId, alertId) {
-    const km = weeks.filter(w => w.car_id === carId).reduce((s, w) => s + Number(w.km || 0), 0);
     const car = cars.find(c => c.id === carId);
+    const km = currentOdometer(car, weeks);
     const newAlerts = (car.alerts || []).map(a => a.id === alertId ? { ...a, lastDoneKm: km } : a);
     const { error } = await supabase.from("cars").update({ alerts: newAlerts }).eq("id", carId);
     if (!error) { setCars(c => c.map(x => x.id === carId ? { ...x, alerts: newAlerts } : x)); toast_("✓ Marked done"); }
+  }
+
+  async function handleSaveServiceRecord(car) {
+    if (!serviceForm.date || !serviceForm.odometerKm) { toast_("Add a date and odometer reading first"); return; }
+    setSyncing(true);
+
+    let photoUrl = null;
+    if (serviceForm.photoFile) {
+      setUploadingPhoto(true);
+      const ext = serviceForm.photoFile.name.split(".").pop() || "jpg";
+      const path = `${userId}/${car.id}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("service-photos").upload(path, serviceForm.photoFile);
+      setUploadingPhoto(false);
+      if (uploadError) {
+        toast_("Photo upload failed — saving record without it");
+      } else {
+        const { data: urlData } = supabase.storage.from("service-photos").getPublicUrl(path);
+        photoUrl = urlData?.publicUrl || null;
+      }
+    }
+
+    const matchedAlert = (car.alerts || []).find(a => a.id === serviceForm.alertId);
+    const row = {
+      user_id: userId,
+      car_id: car.id,
+      alert_id: serviceForm.alertId || null,
+      alert_label: matchedAlert ? matchedAlert.label : "Service",
+      date: serviceForm.date,
+      odometer_km: Number(serviceForm.odometerKm),
+      photo_url: photoUrl,
+      notes: serviceForm.notes,
+    };
+
+    const { data, error } = await supabase.from("service_records").insert(row).select().single();
+    if (error) {
+      toast_("Error saving service record");
+      setSyncing(false);
+      return;
+    }
+    setServiceRecords(r => [data, ...r]);
+
+    // Auto-update the matching maintenance alert, same as "Mark Done"
+    if (serviceForm.alertId) {
+      const newAlerts = (car.alerts || []).map(a => a.id === serviceForm.alertId ? { ...a, lastDoneKm: Number(serviceForm.odometerKm) } : a);
+      const { error: alertError } = await supabase.from("cars").update({ alerts: newAlerts }).eq("id", car.id);
+      if (!alertError) setCars(c => c.map(x => x.id === car.id ? { ...x, alerts: newAlerts } : x));
+    }
+
+    toast_("✓ Service record saved");
+    setShowServiceForm(null);
+    setServiceForm({ alertId: "", date: today(), odometerKm: "", notes: "", photoFile: null, photoPreview: null });
+    setSyncing(false);
+  }
+
+  async function deleteServiceRecord(id) {
+    const record = serviceRecords.find(r => r.id === id);
+    const { error } = await supabase.from("service_records").delete().eq("id", id);
+    if (!error) {
+      setServiceRecords(r => r.filter(x => x.id !== id));
+      // Best-effort cleanup of the stored photo, ignore failures
+      if (record?.photo_url) {
+        try {
+          const path = record.photo_url.split("/service-photos/")[1];
+          if (path) await supabase.storage.from("service-photos").remove([path]);
+        } catch { /* non-critical */ }
+      }
+      toast_("Record deleted");
+    }
   }
 
   async function del(table, id, setter) {
@@ -1235,7 +1435,15 @@ export default function App({ session }) {
         />
       )}
 
-      {view === "maintenance" && <Maintenance cars={cars} weeks={weeks} markDone={markDone} />}
+      {view === "maintenance" && (
+        <Maintenance
+          cars={cars} weeks={weeks} markDone={markDone} serviceRecords={serviceRecords}
+          showServiceForm={showServiceForm} setShowServiceForm={setShowServiceForm}
+          serviceForm={serviceForm} setServiceForm={setServiceForm}
+          syncing={syncing} uploadingPhoto={uploadingPhoto}
+          onSaveServiceRecord={handleSaveServiceRecord} onDeleteServiceRecord={deleteServiceRecord}
+        />
+      )}
 
       {view === "docs" && (
         <Docs
