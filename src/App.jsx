@@ -166,7 +166,9 @@ export default function App({ session }) {
   const blankCost = { carId: cars[0]?.id || "", date: today(), amount: "", category: "Service & Insurance", notes: "" };
 
   const [wForm, setWForm] = useState(blankDaily);
+  const [editingWeekId, setEditingWeekId] = useState(null);
   const [cForm, setCForm] = useState(blankCost);
+  const [editingCostId, setEditingCostId] = useState(null);
   const [showW, setShowW] = useState(false);
   const [showC, setShowC] = useState(false);
   const [showAddCar, setShowAddCar] = useState(false);
@@ -242,21 +244,78 @@ export default function App({ session }) {
     const totalKm = wForm.days.reduce((s, d) => s + (Number(d) || 0), 0);
     if (!wForm.carId || !wForm.weekStart || totalKm === 0 || !wForm.amount) return;
     setSyncing(true);
-    const row = { car_id: wForm.carId, user_id: userId, week_start: wForm.weekStart, km: totalKm, daily_km: wForm.days, amount: Number(wForm.amount), paid: wForm.paid, notes: wForm.notes };
-    const { data, error } = await supabase.from("weeks").insert(row).select().single();
-    if (!error) { setWeeks(w => [data, ...w]); toast_(`✓ Week logged — ${totalKm.toFixed(0)} km`); setShowW(false); setWForm(blankDaily()); setActiveDay(null); }
-    else toast_("Error saving — check connection");
+
+    if (editingWeekId) {
+      // Update existing week
+      const updates = { car_id: wForm.carId, week_start: wForm.weekStart, km: totalKm, daily_km: wForm.days, amount: Number(wForm.amount), paid: wForm.paid, notes: wForm.notes };
+      const { data, error } = await supabase.from("weeks").update(updates).eq("id", editingWeekId).select().single();
+      if (!error) {
+        setWeeks(w => w.map(x => x.id === editingWeekId ? data : x));
+        toast_(`✓ Week updated — ${totalKm.toFixed(0)} km`);
+        setShowW(false); setWForm(blankDaily()); setActiveDay(null); setEditingWeekId(null);
+      } else toast_("Error saving — check connection");
+    } else {
+      // Insert new week
+      const row = { car_id: wForm.carId, user_id: userId, week_start: wForm.weekStart, km: totalKm, daily_km: wForm.days, amount: Number(wForm.amount), paid: wForm.paid, notes: wForm.notes };
+      const { data, error } = await supabase.from("weeks").insert(row).select().single();
+      if (!error) { setWeeks(w => [data, ...w]); toast_(`✓ Week logged — ${totalKm.toFixed(0)} km`); setShowW(false); setWForm(blankDaily()); setActiveDay(null); }
+      else toast_("Error saving — check connection");
+    }
     setSyncing(false);
+  }
+
+  function startEditWeek(week) {
+    setEditingWeekId(week.id);
+    setWForm({
+      carId: week.car_id,
+      weekStart: week.week_start,
+      days: Array.isArray(week.daily_km) && week.daily_km.length === 7 ? week.daily_km.map(String) : [String(week.km), "", "", "", "", "", ""],
+      amount: String(week.amount),
+      paid: week.paid,
+      notes: week.notes || "",
+    });
+    setShowW(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelWeekForm() {
+    setShowW(false);
+    setEditingWeekId(null);
+    setWForm(blankDaily());
+    setActiveDay(null);
   }
 
   async function addCost() {
     if (!cForm.carId || !cForm.date || !cForm.amount) return;
     setSyncing(true);
-    const row = { car_id: cForm.carId, user_id: userId, date: cForm.date, amount: Number(cForm.amount), category: cForm.category, notes: cForm.notes };
-    const { data, error } = await supabase.from("costs").insert(row).select().single();
-    if (!error) { setCosts(c => [data, ...c]); toast_("✓ Cost saved"); setShowC(false); setCForm(f => ({ ...f, amount: "", notes: "" })); }
-    else toast_("Error saving");
+    if (editingCostId) {
+      const updates = { car_id: cForm.carId, date: cForm.date, amount: Number(cForm.amount), category: cForm.category, notes: cForm.notes };
+      const { data, error } = await supabase.from("costs").update(updates).eq("id", editingCostId).select().single();
+      if (!error) {
+        setCosts(c => c.map(x => x.id === editingCostId ? data : x));
+        toast_("✓ Cost updated");
+        setShowC(false); setCForm(blankCost); setEditingCostId(null);
+      } else toast_("Error saving");
+    } else {
+      const row = { car_id: cForm.carId, user_id: userId, date: cForm.date, amount: Number(cForm.amount), category: cForm.category, notes: cForm.notes };
+      const { data, error } = await supabase.from("costs").insert(row).select().single();
+      if (!error) { setCosts(c => [data, ...c]); toast_("✓ Cost saved"); setShowC(false); setCForm(f => ({ ...f, amount: "", notes: "" })); }
+      else toast_("Error saving");
+    }
     setSyncing(false);
+  }
+
+  function startEditCost(cost) {
+    setEditingCostId(cost.id);
+    setCForm({ carId: cost.car_id, date: cost.date, amount: String(cost.amount), category: cost.category, notes: cost.notes || "" });
+    setShowC(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelCostForm() {
+    setShowC(false);
+    setEditingCostId(null);
+    setCForm(blankCost);
   }
 
   async function addCar() {
@@ -317,6 +376,7 @@ export default function App({ session }) {
     const [csvInfo, setCsvInfo] = useState(null); // { km, fuelCost, startDate, endDate, deviceName }
     const [csvError, setCsvError] = useState("");
     const [csvLoading, setCsvLoading] = useState(false);
+    const [csvDateWarning, setCsvDateWarning] = useState("");
 
     function dayDate(i) {
       const d = new Date(wForm.weekStart);
@@ -378,7 +438,34 @@ export default function App({ session }) {
             endDate: endKey ? row[endKey] : "",
             deviceName: nameKey ? row[nameKey] : "Vehicle",
           });
-          setWForm(f => ({ ...f, days: [String(km), "", "", "", "", "", ""] }));
+
+          // Pull the date (not time) portion out of "2026-06-01 00:00:00" style strings
+          const rawStart = startKey ? row[startKey] : "";
+          const rawEnd = endKey ? row[endKey] : "";
+          const startDateOnly = rawStart ? rawStart.split(" ")[0] : "";
+          const endDateOnly = rawEnd ? rawEnd.split(" ")[0] : "";
+
+          let dateWarning = "";
+          if (startDateOnly && endDateOnly) {
+            const sd = new Date(startDateOnly);
+            const ed = new Date(endDateOnly);
+            const dayDiff = Math.round((ed - sd) / 86400000);
+            const startDow = sd.getDay(); // 0 = Sunday, 1 = Monday
+
+            if (startDow !== 1) {
+              dateWarning = `Heads up: this range starts on a ${sd.toLocaleDateString("en-GB", { weekday: "long" })}, not a Monday.`;
+            } else if (dayDiff !== 6) {
+              dateWarning = `Heads up: this range covers ${dayDiff + 1} days, not a full 7-day week.`;
+            }
+          }
+          setCsvDateWarning(dateWarning);
+
+          // Use the CSV's start date as Week Starting if it's a valid date, so the dates always match the mileage
+          setWForm(f => ({
+            ...f,
+            weekStart: startDateOnly && !isNaN(new Date(startDateOnly)) ? startDateOnly : f.weekStart,
+            days: [String(km), "", "", "", "", "", ""],
+          }));
         } catch (err) {
           setCsvError(err.message || "Couldn't read that file — make sure it's the SinoTrack mileage export CSV");
         }
@@ -393,7 +480,7 @@ export default function App({ session }) {
     return (
       <div style={{ ...S.card, maxWidth: 560, marginBottom: 20, borderColor: C.cyan + "55" }}>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, color: C.cyan, fontSize: 15 }}>Log This Week</div>
+          <div style={{ fontWeight: 700, color: C.cyan, fontSize: 15 }}>{editingWeekId ? "Edit Week" : "Log This Week"}</div>
           <div style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{fmtWeekRange(wForm.weekStart)}</div>
         </div>
 
@@ -417,8 +504,13 @@ export default function App({ session }) {
                 ✓ {csvInfo.deviceName} — {csvInfo.km.toFixed(1)} km imported
               </div>
               <div style={{ fontSize: 10, color: C.muted }}>
-                {csvInfo.startDate} → {csvInfo.endDate}
+                {csvInfo.startDate} → {csvInfo.endDate} · Week Starting date set automatically
               </div>
+              {csvDateWarning && (
+                <div style={{ fontSize: 10, color: C.amber, marginTop: 4, fontWeight: 600 }}>
+                  ⚠ {csvDateWarning} Double-check the Week Starting field below before saving.
+                </div>
+              )}
               {!isNaN(csvInfo.fuelCost) && (
                 <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
                   SinoTrack estimates {fmt(csvInfo.fuelCost)} fuel cost for this range — this is a calculated
@@ -493,8 +585,8 @@ export default function App({ session }) {
           <input style={S.input} placeholder="e.g. Gweru trip, short week..." value={wForm.notes} onChange={e => setWForm(f => ({ ...f, notes: e.target.value }))} />
         </div>
         <div style={S.row}>
-          <button style={{ ...S.btn(), flex: 1 }} onClick={addWeek} disabled={syncing}>{syncing ? "Saving..." : "Save Week"}</button>
-          <button style={S.ghost} onClick={() => { setShowW(false); setActiveDay(null); }}>Cancel</button>
+          <button style={{ ...S.btn(), flex: 1 }} onClick={addWeek} disabled={syncing}>{syncing ? "Saving..." : editingWeekId ? "Update Week" : "Save Week"}</button>
+          <button style={S.ghost} onClick={cancelWeekForm}>Cancel</button>
         </div>
       </div>
     );
@@ -596,7 +688,7 @@ export default function App({ session }) {
               <option value="all">All Cars</option>
               {cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <button style={S.btn()} onClick={() => setShowW(v => !v)}>+ Add Week</button>
+            <button style={S.btn()} onClick={() => { setEditingWeekId(null); setWForm(blankDaily()); setShowW(v => !v); }}>+ Add Week</button>
           </div>
         </div>
         {showW && <WeekForm />}
@@ -625,7 +717,12 @@ export default function App({ session }) {
                       </button>
                     </td>
                     <td style={{ ...S.td, color: C.muted, maxWidth: 140 }}>{w.notes}</td>
-                    <td style={S.td}><button onClick={() => del("weeks", w.id, setWeeks)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }}>✕</button></td>
+                    <td style={S.td}>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={() => startEditWeek(w)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }} title="Edit">✎</button>
+                        <button onClick={() => del("weeks", w.id, setWeeks)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }} title="Delete">✕</button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -664,12 +761,12 @@ export default function App({ session }) {
               <option value="all">All Cars</option>
               {cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <button style={S.btn(C.red)} onClick={() => setShowC(v => !v)}>+ Add Cost</button>
+            <button style={S.btn(C.red)} onClick={() => { setEditingCostId(null); setCForm(blankCost); setShowC(v => !v); }}>+ Add Cost</button>
           </div>
         </div>
         {showC && (
           <div style={{ ...S.card, maxWidth: 500, marginBottom: 16, borderColor: C.red + "44" }}>
-            <div style={{ fontWeight: 700, color: C.red, marginBottom: 14 }}>Record Cost</div>
+            <div style={{ fontWeight: 700, color: C.red, marginBottom: 14 }}>{editingCostId ? "Edit Cost" : "Record Cost"}</div>
             <div style={{ ...S.row, marginBottom: 12 }}>
               <div style={{ flex: 1 }}><label style={S.label}>Car</label>
                 <select style={S.input} value={cForm.carId} onChange={e => setCForm(f => ({ ...f, carId: e.target.value }))}>
@@ -694,8 +791,8 @@ export default function App({ session }) {
               <input style={S.input} placeholder="e.g. 3 tyres, insurance..." value={cForm.notes} onChange={e => setCForm(f => ({ ...f, notes: e.target.value }))} />
             </div>
             <div style={S.row}>
-              <button style={S.btn(C.red)} onClick={addCost} disabled={syncing}>{syncing ? "Saving..." : "Save"}</button>
-              <button style={S.ghost} onClick={() => setShowC(false)}>Cancel</button>
+              <button style={S.btn(C.red)} onClick={addCost} disabled={syncing}>{syncing ? "Saving..." : editingCostId ? "Update" : "Save"}</button>
+              <button style={S.ghost} onClick={cancelCostForm}>Cancel</button>
             </div>
           </div>
         )}
@@ -710,7 +807,12 @@ export default function App({ session }) {
                   <td style={{ ...S.td, color: C.red, fontWeight: 700, fontFamily: "monospace" }}>{fmt(c.amount)}</td>
                   <td style={S.td}><span style={{ background: C.faint, borderRadius: 6, padding: "2px 8px", fontSize: 11 }}>{c.category}</span></td>
                   <td style={{ ...S.td, color: C.muted }}>{c.notes}</td>
-                  <td style={S.td}><button onClick={() => del("costs", c.id, setCosts)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }}>✕</button></td>
+                  <td style={S.td}>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => startEditCost(c)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }} title="Edit">✎</button>
+                      <button onClick={() => del("costs", c.id, setCosts)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }} title="Delete">✕</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
