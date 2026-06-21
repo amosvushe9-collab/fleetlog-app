@@ -21,12 +21,17 @@ function getSundayStr(mondayStr) {
   d.setDate(d.getDate() + 6);
   return d.toISOString().slice(0, 10);
 }
-function fmtWeekRange(mondayStr) {
-  const mon = new Date(mondayStr);
-  const sun = new Date(mondayStr);
-  sun.setDate(sun.getDate() + 6);
+function addDaysStr(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+// Formats a date range. Falls back gracefully if week_end isn't set (older rows).
+function fmtWeekRange(startStr, endStr) {
+  const start = new Date(startStr);
+  const end = new Date(endStr || addDaysStr(startStr, 6));
   const opts = { day: "numeric", month: "short" };
-  return `${mon.toLocaleDateString("en-GB", opts)} – ${sun.toLocaleDateString("en-GB", { ...opts, year: "numeric" })}`;
+  return `${start.toLocaleDateString("en-GB", opts)} – ${end.toLocaleDateString("en-GB", { ...opts, year: "numeric" })}`;
 }
 function daysUntil(dateStr) {
   return Math.ceil((new Date(dateStr) - new Date(today())) / 86400000);
@@ -164,12 +169,17 @@ function WeeklyBars({ weeks, cars }) {
 // ════════════════════════════════════════════════════════════════════════════
 
 function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDay, syncing, onSave, onCancel }) {
-  const totalKm = wForm.days.reduce((s, d) => s + (Number(d) || 0), 0);
+  const totalKm = wForm.entryMode === "total"
+    ? Number(wForm.totalKm) || 0
+    : wForm.days.reduce((s, d) => s + (Number(d) || 0), 0);
   const perKm = totalKm > 0 && wForm.amount > 0 ? Number(wForm.amount) / totalKm : 0;
   const [csvInfo, setCsvInfo] = useState(null);
   const [csvError, setCsvError] = useState("");
   const [csvLoading, setCsvLoading] = useState(false);
   const [csvDateWarning, setCsvDateWarning] = useState("");
+
+  const spanDays = Math.max(1, Math.round((new Date(wForm.weekEnd) - new Date(wForm.weekStart)) / 86400000) + 1);
+  const isStandardWeek = spanDays === 7;
 
   function dayDate(i) {
     const d = new Date(wForm.weekStart);
@@ -233,17 +243,21 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
           const dayDiff = Math.round((ed - sd) / 86400000);
           const startDow = sd.getDay();
           if (startDow !== 1) {
-            dateWarning = `Heads up: this range starts on a ${sd.toLocaleDateString("en-GB", { weekday: "long" })}, not a Monday.`;
+            dateWarning = `This range starts on a ${sd.toLocaleDateString("en-GB", { weekday: "long" })}, not a Monday — that's fine, it's been captured exactly as shown below.`;
           } else if (dayDiff !== 6) {
-            dateWarning = `Heads up: this range covers ${dayDiff + 1} days, not a full 7-day week.`;
+            dateWarning = `This range covers ${dayDiff + 1} days, not a full 7-day week — that's fine, it's been captured exactly as shown below.`;
           }
         }
         setCsvDateWarning(dateWarning);
 
+        // CSV gives one total for the range — always goes into total-only mode with real start/end dates
         setWForm(f => ({
           ...f,
+          entryMode: "total",
           weekStart: startDateOnly && !isNaN(new Date(startDateOnly)) ? startDateOnly : f.weekStart,
-          days: [String(km), "", "", "", "", "", ""],
+          weekEnd: endDateOnly && !isNaN(new Date(endDateOnly)) ? endDateOnly : f.weekEnd,
+          totalKm: String(km),
+          days: Array(7).fill(""),
         }));
       } catch (err) {
         setCsvError(err.message || "Couldn't read that file — make sure it's the SinoTrack mileage export CSV");
@@ -257,14 +271,14 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
     <div style={{ ...S.card, maxWidth: 560, marginBottom: 20, borderColor: C.cyan + "55" }}>
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 700, color: C.cyan, fontSize: 15 }}>{editingWeekId ? "Edit Week" : "Log This Week"}</div>
-        <div style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{fmtWeekRange(wForm.weekStart)}</div>
+        <div style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{fmtWeekRange(wForm.weekStart, wForm.weekEnd)} · {spanDays} day{spanDays !== 1 ? "s" : ""}</div>
       </div>
 
       <div style={{ background: C.faint, borderRadius: 8, padding: "12px 14px", marginBottom: 16, border: `1px dashed ${C.border}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: csvInfo ? 10 : 0 }}>
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Import from SinoTrack</div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Set Mon–Sun range on SinoTrack, download CSV, upload here</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Pick any date range on SinoTrack, download CSV, upload here</div>
           </div>
           <label style={{ ...S.btn(C.cyan), padding: "7px 14px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
             {csvLoading ? "Reading..." : "Choose File"}
@@ -279,11 +293,11 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
               ✓ {csvInfo.deviceName} — {csvInfo.km.toFixed(1)} km imported
             </div>
             <div style={{ fontSize: 10, color: C.muted }}>
-              {csvInfo.startDate} → {csvInfo.endDate} · Week Starting date set automatically
+              {csvInfo.startDate} → {csvInfo.endDate} · dates set automatically below
             </div>
             {csvDateWarning && (
-              <div style={{ fontSize: 10, color: C.amber, marginTop: 4, fontWeight: 600 }}>
-                ⚠ {csvDateWarning} Double-check the Week Starting field below before saving.
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+                ℹ {csvDateWarning}
               </div>
             )}
             {!isNaN(csvInfo.fuelCost) && (
@@ -304,40 +318,89 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
           </select>
         </div>
         <div style={{ flex: 1 }}>
-          <label style={S.label}>Week Starting (Mon)</label>
-          <input type="date" style={S.input} value={wForm.weekStart} onChange={e => setWForm(f => ({ ...f, weekStart: getMondayStr(e.target.value) }))} />
+          <label style={S.label}>Start Date</label>
+          <input
+            type="date" style={S.input} value={wForm.weekStart}
+            onChange={e => {
+              const newStart = e.target.value;
+              setWForm(f => {
+                // If the gap to the current end no longer makes sense, suggest +6 days — but never force it
+                const currentSpan = Math.round((new Date(f.weekEnd) - new Date(f.weekStart)) / 86400000);
+                const newEnd = new Date(newStart) > new Date(f.weekEnd) ? addDaysStr(newStart, Math.max(currentSpan, 0)) : f.weekEnd;
+                return { ...f, weekStart: newStart, weekEnd: newEnd };
+              });
+            }}
+          />
         </div>
         <div style={{ flex: 1 }}>
-          <label style={S.label}>Week Ending (Sun)</label>
-          <input type="date" style={{ ...S.input, color: C.muted, cursor: "not-allowed" }} value={getSundayStr(wForm.weekStart)} readOnly />
+          <label style={S.label}>End Date</label>
+          <input
+            type="date" style={S.input} value={wForm.weekEnd}
+            onChange={e => setWForm(f => ({ ...f, weekEnd: e.target.value }))}
+          />
         </div>
       </div>
 
-      <label style={S.label}>Daily Mileage — tap each day as you read SinoTrack, or use the import above</label>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 12 }}>
-        {DAYS.map((day, i) => {
-          const isActive = activeDay === i;
-          const hasVal = Number(wForm.days[i]) > 0;
-          return (
-            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: isActive ? C.cyan : C.muted, textTransform: "uppercase" }}>{day}</div>
-              <div style={{ fontSize: 9, color: C.muted }}>{dayDate(i)}</div>
-              <input
-                type="number" inputMode="numeric" placeholder="0"
-                value={wForm.days[i]}
-                onFocus={() => setActiveDay(i)}
-                onBlur={() => setActiveDay(null)}
-                onChange={e => { const days = [...wForm.days]; days[i] = e.target.value; setWForm(f => ({ ...f, days })); }}
-                style={{ ...S.input, textAlign: "center", padding: "10px 2px", fontSize: 15, fontWeight: 700, fontFamily: "monospace", borderColor: isActive ? C.cyan : C.border, color: hasVal ? C.cyan : C.muted, background: isActive ? "#0d2030" : C.faint, width: "100%" }}
-              />
-            </div>
-          );
-        })}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button
+          style={{ ...S.btn(wForm.entryMode === "daily" ? C.cyan : C.faint), flex: 1, color: wForm.entryMode === "daily" ? "#000" : C.muted, fontSize: 12 }}
+          onClick={() => setWForm(f => ({ ...f, entryMode: "daily" }))}
+        >
+          Daily breakdown
+        </button>
+        <button
+          style={{ ...S.btn(wForm.entryMode === "total" ? C.cyan : C.faint), flex: 1, color: wForm.entryMode === "total" ? "#000" : C.muted, fontSize: 12 }}
+          onClick={() => setWForm(f => ({ ...f, entryMode: "total" }))}
+        >
+          Just enter total km
+        </button>
       </div>
+
+      {wForm.entryMode === "daily" ? (
+        <>
+          {!isStandardWeek && (
+            <div style={{ fontSize: 11, color: C.amber, marginBottom: 8 }}>
+              ℹ This range is {spanDays} days, not 7 — the daily grid below assumes a 7-day week starting on
+              the Start Date. If that doesn't fit, switch to "Just enter total km" above instead.
+            </div>
+          )}
+          <label style={S.label}>Daily Mileage — tap each day as you read SinoTrack</label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 12 }}>
+            {DAYS.map((day, i) => {
+              const isActive = activeDay === i;
+              const hasVal = Number(wForm.days[i]) > 0;
+              return (
+                <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: isActive ? C.cyan : C.muted, textTransform: "uppercase" }}>{day}</div>
+                  <div style={{ fontSize: 9, color: C.muted }}>{dayDate(i)}</div>
+                  <input
+                    type="number" inputMode="numeric" placeholder="0"
+                    value={wForm.days[i]}
+                    onFocus={() => setActiveDay(i)}
+                    onBlur={() => setActiveDay(null)}
+                    onChange={e => { const days = [...wForm.days]; days[i] = e.target.value; setWForm(f => ({ ...f, days })); }}
+                    style={{ ...S.input, textAlign: "center", padding: "10px 2px", fontSize: 15, fontWeight: 700, fontFamily: "monospace", borderColor: isActive ? C.cyan : C.border, color: hasVal ? C.cyan : C.muted, background: isActive ? "#0d2030" : C.faint, width: "100%" }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div style={{ marginBottom: 12 }}>
+          <label style={S.label}>Total Mileage for This Range (km)</label>
+          <input
+            type="number" inputMode="numeric" placeholder="e.g. 602"
+            value={wForm.totalKm}
+            onChange={e => setWForm(f => ({ ...f, totalKm: e.target.value }))}
+            style={{ ...S.input, fontSize: 18, fontWeight: 800, fontFamily: "monospace", color: C.cyan, padding: "12px 14px" }}
+          />
+        </div>
+      )}
 
       <div style={{ background: C.faint, borderRadius: 8, padding: "10px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <span style={{ color: C.muted, fontSize: 12 }}>Week total</span>
+          <span style={{ color: C.muted, fontSize: 12 }}>Total</span>
           <span style={{ color: C.cyan, fontWeight: 800, fontFamily: "monospace", fontSize: 18 }}>{totalKm.toFixed(0)} km</span>
         </div>
         {perKm > 0 && <span style={{ color: C.amber, fontFamily: "monospace", fontSize: 12, fontWeight: 600 }}>{fmtRate(perKm)}</span>}
@@ -628,7 +691,7 @@ function Weekly({
               const pk = w.km > 0 ? w.amount / w.km : 0;
               return (
                 <tr key={w.id} onMouseEnter={e => e.currentTarget.style.background = C.faint} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  <td style={{ ...S.td, color: "#f8fafc", fontWeight: 600 }}>{fmtWeekRange(w.week_start)}</td>
+                  <td style={{ ...S.td, color: "#f8fafc", fontWeight: 600 }}>{fmtWeekRange(w.week_start, w.week_end)}</td>
                   <td style={S.td}><span style={{ color: carColor(w.car_id), fontWeight: 600 }}>{carName(w.car_id)}</span></td>
                   <td style={{ ...S.td, fontFamily: "monospace", color: C.cyan }}>{fmtKm(w.km)}</td>
                   <td style={{ ...S.td, fontFamily: "monospace", color: C.green, fontWeight: 700 }}>{fmt(w.amount)}</td>
@@ -869,7 +932,7 @@ export default function App({ session }) {
   const [toast, setToast] = useState("");
   const [activeDay, setActiveDay] = useState(null);
 
-  const blankDaily = () => ({ carId: cars[0]?.id || "", weekStart: getMondayStr(), days: Array(7).fill(""), amount: "", paid: true, notes: "" });
+  const blankDaily = () => ({ carId: cars[0]?.id || "", weekStart: getMondayStr(), weekEnd: getSundayStr(getMondayStr()), entryMode: "daily", totalKm: "", days: Array(7).fill(""), amount: "", paid: true, notes: "" });
   const blankCost = { carId: cars[0]?.id || "", date: today(), amount: "", category: "Service & Insurance", notes: "" };
   const blankDoc = { carId: cars[0]?.id || "", type: DOC_TYPES[0], expiry: "", notes: "" };
 
@@ -954,12 +1017,16 @@ export default function App({ session }) {
 
   // ── Actions ───────────────────────────────────────────────────────────────
   async function handleSaveWeek() {
-    const totalKm = wForm.days.reduce((s, d) => s + (Number(d) || 0), 0);
-    if (!wForm.carId || !wForm.weekStart || totalKm === 0 || !wForm.amount) return;
+    const totalKm = wForm.entryMode === "total"
+      ? Number(wForm.totalKm) || 0
+      : wForm.days.reduce((s, d) => s + (Number(d) || 0), 0);
+    if (!wForm.carId || !wForm.weekStart || !wForm.weekEnd || totalKm === 0 || !wForm.amount) return;
     setSyncing(true);
 
+    const dailyKmToStore = wForm.entryMode === "total" ? null : wForm.days;
+
     if (editingWeekId) {
-      const updates = { car_id: wForm.carId, week_start: wForm.weekStart, km: totalKm, daily_km: wForm.days, amount: Number(wForm.amount), paid: wForm.paid, notes: wForm.notes };
+      const updates = { car_id: wForm.carId, week_start: wForm.weekStart, week_end: wForm.weekEnd, km: totalKm, daily_km: dailyKmToStore, amount: Number(wForm.amount), paid: wForm.paid, notes: wForm.notes };
       const { data, error } = await supabase.from("weeks").update(updates).eq("id", editingWeekId).select().single();
       if (!error) {
         setWeeks(w => w.map(x => x.id === editingWeekId ? data : x));
@@ -967,7 +1034,7 @@ export default function App({ session }) {
         setShowW(false); setWForm(blankDaily()); setActiveDay(null); setEditingWeekId(null);
       } else toast_("Error saving — check connection");
     } else {
-      const row = { car_id: wForm.carId, user_id: userId, week_start: wForm.weekStart, km: totalKm, daily_km: wForm.days, amount: Number(wForm.amount), paid: wForm.paid, notes: wForm.notes };
+      const row = { car_id: wForm.carId, user_id: userId, week_start: wForm.weekStart, week_end: wForm.weekEnd, km: totalKm, daily_km: dailyKmToStore, amount: Number(wForm.amount), paid: wForm.paid, notes: wForm.notes };
       const { data, error } = await supabase.from("weeks").insert(row).select().single();
       if (!error) { setWeeks(w => [data, ...w]); toast_(`✓ Week logged — ${totalKm.toFixed(0)} km`); setShowW(false); setWForm(blankDaily()); setActiveDay(null); }
       else toast_("Error saving — check connection");
@@ -977,10 +1044,14 @@ export default function App({ session }) {
 
   function startEditWeek(week) {
     setEditingWeekId(week.id);
+    const hasDailyBreakdown = Array.isArray(week.daily_km) && week.daily_km.length === 7;
     setWForm({
       carId: week.car_id,
       weekStart: week.week_start,
-      days: Array.isArray(week.daily_km) && week.daily_km.length === 7 ? week.daily_km.map(String) : [String(week.km), "", "", "", "", "", ""],
+      weekEnd: week.week_end || addDaysStr(week.week_start, 6),
+      entryMode: hasDailyBreakdown ? "daily" : "total",
+      totalKm: hasDailyBreakdown ? "" : String(week.km),
+      days: hasDailyBreakdown ? week.daily_km.map(String) : Array(7).fill(""),
       amount: String(week.amount),
       paid: week.paid,
       notes: week.notes || "",
