@@ -316,6 +316,7 @@ export default function App({ session }) {
     const perKm = totalKm > 0 && wForm.amount > 0 ? Number(wForm.amount) / totalKm : 0;
     const [csvInfo, setCsvInfo] = useState(null); // { km, fuelCost, startDate, endDate, deviceName }
     const [csvError, setCsvError] = useState("");
+    const [csvLoading, setCsvLoading] = useState(false);
 
     function dayDate(i) {
       const d = new Date(wForm.weekStart);
@@ -324,38 +325,70 @@ export default function App({ session }) {
     }
 
     function handleCsvUpload(e) {
-      const file = e.target.files[0];
+      const file = e.target.files && e.target.files[0];
       if (!file) return;
       setCsvError("");
+      setCsvLoading(true);
+      setCsvInfo(null);
+
       const reader = new FileReader();
+
+      reader.onerror = () => {
+        setCsvLoading(false);
+        setCsvError("Couldn't open that file. Try selecting it again.");
+      };
+
       reader.onload = (evt) => {
+        setCsvLoading(false);
         try {
-          const text = evt.target.result;
-          // SinoTrack export: header row + 1 data row, tab/comma separated, BOM possible
-          const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim());
-          if (lines.length < 2) throw new Error("No data row found");
-          const headers = lines[0].split(",").map(h => h.trim().replace(/^\t/, ""));
-          const values = lines[1].split(",").map(v => v.trim().replace(/^\t/, ""));
+          let text = evt.target.result;
+          if (typeof text !== "string") throw new Error("Empty file");
+
+          // Strip BOM, normalize line endings, split into non-empty lines
+          text = text.replace(/^\uFEFF/, "");
+          const lines = text.split(/\r\n|\r|\n/).map(l => l.trim()).filter(l => l.length > 0);
+          if (lines.length < 2) throw new Error("File only has a header row, no data");
+
+          // Some exports prefix every field with a tab character — strip leading tabs from each cell
+          const parseLine = (line) => line.split(",").map(cell => cell.replace(/^\t+/, "").trim());
+
+          const headers = parseLine(lines[0]);
+          const values = parseLine(lines[1]);
           const row = {};
           headers.forEach((h, i) => { row[h] = values[i]; });
 
-          const km = parseFloat(row["Drive mileage(km)"]);
-          const fuelCost = parseFloat(row["Cost(Dollar)"]);
-          const startDate = row["Start time"];
-          const endDate = row["End time"];
-          const deviceName = row["Device name"];
+          // Find mileage column flexibly in case header text varies slightly
+          const kmKey = Object.keys(row).find(k => /mileage/i.test(k));
+          const costKey = Object.keys(row).find(k => /cost/i.test(k));
+          const startKey = Object.keys(row).find(k => /start/i.test(k));
+          const endKey = Object.keys(row).find(k => /end/i.test(k));
+          const nameKey = Object.keys(row).find(k => /device/i.test(k));
 
-          if (isNaN(km)) throw new Error("Couldn't find mileage in this file");
+          const km = kmKey ? parseFloat(row[kmKey]) : NaN;
+          const fuelCost = costKey ? parseFloat(row[costKey]) : NaN;
 
-          setCsvInfo({ km, fuelCost, startDate, endDate, deviceName });
-          // Put the total into day 0 (Mon) and clear the rest, since SinoTrack gives one range total
+          if (isNaN(km)) {
+            throw new Error("Found the file but couldn't read a mileage number from it");
+          }
+
+          setCsvInfo({
+            km,
+            fuelCost,
+            startDate: startKey ? row[startKey] : "",
+            endDate: endKey ? row[endKey] : "",
+            deviceName: nameKey ? row[nameKey] : "Vehicle",
+          });
           setWForm(f => ({ ...f, days: [String(km), "", "", "", "", "", ""] }));
         } catch (err) {
-          setCsvError("Couldn't read that file — make sure it's the SinoTrack mileage export CSV");
+          setCsvError(err.message || "Couldn't read that file — make sure it's the SinoTrack mileage export CSV");
         }
       };
+
       reader.readAsText(file);
+      // Reset the input value so selecting the same file twice still fires onChange
+      e.target.value = "";
     }
+
 
     return (
       <div style={{ ...S.card, maxWidth: 560, marginBottom: 20, borderColor: C.cyan + "55" }}>
@@ -372,10 +405,11 @@ export default function App({ session }) {
               <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Set Mon–Sun range on SinoTrack, download CSV, upload here</div>
             </div>
             <label style={{ ...S.btn(C.cyan), padding: "7px 14px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-              Choose File
-              <input type="file" accept=".csv" onChange={handleCsvUpload} style={{ display: "none" }} />
+              {csvLoading ? "Reading..." : "Choose File"}
+              <input type="file" accept=".csv,text/csv,text/plain,application/vnd.ms-excel" onChange={handleCsvUpload} style={{ display: "none" }} />
             </label>
           </div>
+          {csvLoading && <div style={{ color: C.muted, fontSize: 11, marginTop: 8 }}>Reading file...</div>}
           {csvError && <div style={{ color: C.red, fontSize: 11, marginTop: 8 }}>{csvError}</div>}
           {csvInfo && (
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
