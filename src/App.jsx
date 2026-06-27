@@ -645,7 +645,7 @@ function monthLabel(key) {
   return new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
-function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, carName, setView }) {
+function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView }) {
   // Build the list of months that actually have data, newest first, plus "All Time"
   const availableMonths = useMemo(() => {
     const keys = new Set();
@@ -712,8 +712,8 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, carName, setView 
         </div>
       )}
 
-      {(allAlerts.length > 0 || docAlerts.length > 0) && (
-        <div style={{ ...S.card, borderColor: (allAlerts.some(a => a.status === "due") || docAlerts.some(d => d.level === "expired" || d.level === "critical")) ? C.red : C.amber, marginBottom: 16 }}>
+      {(allAlerts.length > 0 || docAlerts.length > 0 || paymentAlerts.length > 0 || missingWeekAlerts.length > 0) && (
+        <div style={{ ...S.card, borderColor: (allAlerts.some(a => a.status === "due") || docAlerts.some(d => d.level === "expired" || d.level === "critical") || paymentAlerts.length > 0) ? C.red : C.amber, marginBottom: 16 }}>
           {allAlerts.length > 0 && <>
             <div style={{ fontWeight: 700, color: allAlerts.some(a => a.status === "due") ? C.red : C.amber, marginBottom: 8, fontSize: 13 }}>
               {allAlerts.some(a => a.status === "due") ? "⚠ Maintenance Overdue" : "⏳ Maintenance Due Soon"}
@@ -734,6 +734,30 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, carName, setView 
               <div key={d.id} style={{ fontSize: 12, color: d.color, marginBottom: 3, display: "flex", justifyContent: "space-between" }}>
                 <span><strong>{carName(d.car_id)}</strong> — {d.type}</span>
                 <span style={{ color: C.muted }}>{d.label}</span>
+              </div>
+            ))}
+          </>}
+          {paymentAlerts.length > 0 && <>
+            {(allAlerts.length > 0 || docAlerts.length > 0) && <div style={{ borderTop: `1px solid ${C.border}`, margin: "10px 0" }} />}
+            <div style={{ fontWeight: 700, color: C.red, marginBottom: 8, fontSize: 13 }}>
+              💰 Payment Overdue
+            </div>
+            {paymentAlerts.map(w => (
+              <div key={w.id} style={{ fontSize: 12, color: C.red, marginBottom: 3, display: "flex", justifyContent: "space-between" }}>
+                <span><strong>{carName(w.car_id)}</strong> — week ending {new Date(w.endStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                <span style={{ color: C.muted }}>{w.daysSinceEnd}d unpaid · {fmt(w.amount)}</span>
+              </div>
+            ))}
+          </>}
+          {missingWeekAlerts.length > 0 && <>
+            {(allAlerts.length > 0 || docAlerts.length > 0 || paymentAlerts.length > 0) && <div style={{ borderTop: `1px solid ${C.border}`, margin: "10px 0" }} />}
+            <div style={{ fontWeight: 700, color: C.amber, marginBottom: 8, fontSize: 13 }}>
+              📋 Week Possibly Not Logged
+            </div>
+            {missingWeekAlerts.map(({ car, latestEndStr, daysSinceLastWeek }) => (
+              <div key={car.id} style={{ fontSize: 12, color: C.amber, marginBottom: 3, display: "flex", justifyContent: "space-between" }}>
+                <span><strong>{car.name}</strong> — last week ended {new Date(latestEndStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                <span style={{ color: C.muted }}>{daysSinceLastWeek}d ago — new week due?</span>
               </div>
             ))}
           </>}
@@ -1212,7 +1236,36 @@ export default function App({ session }) {
         .sort((a, b) => new Date(a.expiry) - new Date(b.expiry))
   , [docs]);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  // Payment overdue alerts — week logged as Pending and week_end was more than 3 days ago
+  const paymentAlerts = useMemo(() => {
+    const todayStr = today();
+    return weeks
+      .filter(w => !w.paid)
+      .map(w => {
+        const endStr = w.week_end || addDaysStr(w.week_start, 6);
+        const daysSinceEnd = Math.floor((new Date(todayStr) - new Date(endStr)) / 86400000);
+        return { ...w, endStr, daysSinceEnd };
+      })
+      .filter(w => w.daysSinceEnd > 3) // grace period of 3 days
+      .sort((a, b) => b.daysSinceEnd - a.daysSinceEnd);
+  }, [weeks]);
+
+  // Missing week alerts — a car has no week logged in the last 10 days
+  const missingWeekAlerts = useMemo(() => {
+    const todayStr = today();
+    return cars.map(car => {
+      const carWeeks = weeks.filter(w => w.car_id === car.id);
+      if (carWeeks.length === 0) return null; // never logged anything, not an alert yet
+      const latestWeek = carWeeks.reduce((latest, w) =>
+        (w.week_end || w.week_start) > (latest.week_end || latest.week_start) ? w : latest
+      );
+      const latestEndStr = latestWeek.week_end || addDaysStr(latestWeek.week_start, 6);
+      const daysSinceLastWeek = Math.floor((new Date(todayStr) - new Date(latestEndStr)) / 86400000);
+      if (daysSinceLastWeek > 10) return { car, latestEndStr, daysSinceLastWeek };
+      return null;
+    }).filter(Boolean);
+  }, [cars, weeks]);
+
   async function handleSaveWeek() {
     const totalKm = wForm.entryMode === "total"
       ? Number(wForm.totalKm) || 0
@@ -1475,7 +1528,7 @@ export default function App({ session }) {
       </header>
 
       {view === "dashboard" && (
-        <Dashboard cars={cars} weeks={weeks} costs={costs} allAlerts={allAlerts} docAlerts={docAlerts} carName={carName} setView={setView} />
+        <Dashboard cars={cars} weeks={weeks} costs={costs} allAlerts={allAlerts} docAlerts={docAlerts} paymentAlerts={paymentAlerts} missingWeekAlerts={missingWeekAlerts} carName={carName} setView={setView} />
       )}
 
       {view === "weekly" && (
