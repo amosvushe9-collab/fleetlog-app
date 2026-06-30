@@ -36,12 +36,20 @@ function fmtWeekRange(startStr, endStr) {
 function daysUntil(dateStr) {
   return Math.ceil((new Date(dateStr) - new Date(today())) / 86400000);
 }
+function fmtDaysExtra(d) {
+  const absD = Math.abs(d);
+  if (absD < 14) return ""; // not worth showing weeks/months for very short spans
+  const weeks = Math.round(absD / 7);
+  const months = absD / 30.44;
+  if (absD < 60) return ` (~${weeks}wk)`;
+  return ` (~${months.toFixed(1)}mo)`;
+}
 function docStatus(expiry) {
   const d = daysUntil(expiry);
-  if (d < 0)   return { label: `Expired ${Math.abs(d)}d ago`, color: "#ef4444", level: "expired" };
+  if (d < 0)   return { label: `Expired ${Math.abs(d)}d ago${fmtDaysExtra(d)}`, color: "#ef4444", level: "expired" };
   if (d <= 7)  return { label: `Expires in ${d}d — urgent!`, color: "#ef4444", level: "critical" };
-  if (d <= 30) return { label: `Expires in ${d}d`, color: "#f59e0b", level: "soon" };
-  return { label: `Valid · ${d}d left`, color: "#22c55e", level: "ok" };
+  if (d <= 30) return { label: `Expires in ${d}d${fmtDaysExtra(d)}`, color: "#f59e0b", level: "soon" };
+  return { label: `Valid · ${d}d left${fmtDaysExtra(d)}`, color: "#22c55e", level: "ok" };
 }
 
 // True odometer = baseline reading + every week's km logged on/after the baseline date
@@ -1038,7 +1046,18 @@ function Maintenance({
 }
 
 function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, syncing, onSaveDoc }) {
-  const grouped = cars.map(car => ({ car, docs: docs.filter(d => d.car_id === car.id) }));
+  const grouped = cars.map(car => {
+    const carDocs = docs.filter(d => d.car_id === car.id);
+    // Group by document type, sort each group newest-expiry-first so [0] is always "current"
+    const byType = {};
+    carDocs.forEach(d => {
+      if (!byType[d.type]) byType[d.type] = [];
+      byType[d.type].push(d);
+    });
+    Object.values(byType).forEach(arr => arr.sort((a, b) => new Date(b.expiry) - new Date(a.expiry)));
+    return { car, byType };
+  });
+
   return (
     <div style={S.page}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
@@ -1050,22 +1069,42 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
         <DocForm form={form} setForm={setForm} cars={cars} syncing={syncing} onSave={onSaveDoc} onCancel={() => setShowForm(false)} />
       )}
 
-      {grouped.map(({ car, docs: cd }) => (
+      {grouped.map(({ car, byType }) => (
         <div key={car.id} style={{ ...S.card, marginBottom: 16, borderTop: `3px solid ${car.color}` }}>
           <div style={{ fontWeight: 700, color: car.color, fontSize: 15, marginBottom: 14 }}>{car.name}</div>
-          {cd.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No documents yet.</div>}
-          {cd.map(d => { const st = docStatus(d.expiry); return (
-            <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 8, marginBottom: 8, background: C.faint, borderLeft: `3px solid ${st.color}` }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{d.type}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Expires: {new Date(d.expiry).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{d.notes ? ` · ${d.notes}` : ""}</div>
+          {Object.keys(byType).length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No documents yet.</div>}
+          {Object.entries(byType).map(([type, entries]) => {
+            const current = entries[0];
+            const history = entries.slice(1);
+            const st = docStatus(current.expiry);
+            return (
+              <div key={type} style={{ marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 8, background: C.faint, borderLeft: `3px solid ${st.color}` }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{type}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Expires: {new Date(current.expiry).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{current.notes ? ` · ${current.notes}` : ""}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.color + "18", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap" }}>{st.label}</span>
+                    <button onClick={() => del("docs", current.id, setDocs)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }}>✕</button>
+                  </div>
+                </div>
+                {history.length > 0 && (
+                  <details style={{ marginTop: 4, marginLeft: 12 }}>
+                    <summary style={{ fontSize: 11, color: C.muted, cursor: "pointer" }}>
+                      {history.length} older {type} record{history.length > 1 ? "s" : ""}
+                    </summary>
+                    {history.map(d => (
+                      <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", marginTop: 4, borderRadius: 6, background: C.bg, fontSize: 11, color: C.muted }}>
+                        <span>Expired: {new Date(d.expiry).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{d.notes ? ` · ${d.notes}` : ""}</span>
+                        <button onClick={() => del("docs", d.id, setDocs)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }}>✕</button>
+                      </div>
+                    ))}
+                  </details>
+                )}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.color + "18", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap" }}>{st.label}</span>
-                <button onClick={() => del("docs", d.id, setDocs)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }}>✕</button>
-              </div>
-            </div>
-          ); })}
+            );
+          })}
         </div>
       ))}
     </div>
@@ -1230,11 +1269,21 @@ export default function App({ session }) {
     return out;
   }, [cars, weeks]);
 
-  const docAlerts = useMemo(() =>
-    docs.map(d => ({ ...d, ...docStatus(d.expiry) }))
-        .filter(d => d.level !== "ok")
-        .sort((a, b) => new Date(a.expiry) - new Date(b.expiry))
-  , [docs]);
+  const docAlerts = useMemo(() => {
+    // Group by car + document type, keep only the one with the furthest-out expiry date —
+    // that's the active/current one. Older entries of the same type are history, not alerts.
+    const latestByKey = {};
+    docs.forEach(d => {
+      const key = `${d.car_id}::${d.type}`;
+      if (!latestByKey[key] || new Date(d.expiry) > new Date(latestByKey[key].expiry)) {
+        latestByKey[key] = d;
+      }
+    });
+    return Object.values(latestByKey)
+      .map(d => ({ ...d, ...docStatus(d.expiry) }))
+      .filter(d => d.level !== "ok")
+      .sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+  }, [docs]);
 
   // Payment overdue alerts — week logged as Pending and week_end was more than 3 days ago
   const paymentAlerts = useMemo(() => {
