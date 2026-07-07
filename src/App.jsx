@@ -577,10 +577,16 @@ function ServiceRecordForm({ car, alerts, form, setForm, syncing, uploading, onS
     setForm(f => ({ ...f, photoFile: file, photoPreview: URL.createObjectURL(file) }));
   }
 
+  const STICKER_ITEMS = [
+    "Engine Oil Changed", "Gear Oil Changed", "Diff Oil Changed",
+    "Oil Filter Changed", "Air Filter Changed", "Fuel Filter Changed",
+  ];
+
   return (
     <div style={{ ...S.card, maxWidth: 460, marginBottom: 14, borderColor: C.green + "44" }}>
       <div style={{ fontWeight: 700, color: C.green, marginBottom: 14 }}>Add Service Record — {car.name}</div>
 
+      {/* Photo — no capture= so Android lets you choose camera OR gallery */}
       <div style={{ marginBottom: 14 }}>
         <label style={S.label}>Photo of Service Sticker</label>
         {form.photoPreview ? (
@@ -594,39 +600,93 @@ function ServiceRecordForm({ car, alerts, form, setForm, syncing, uploading, onS
         ) : (
           <label htmlFor={fileInputId} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, height: 120, border: `1px dashed ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.muted, fontSize: 12 }}>
             <span style={{ fontSize: 22 }}>📷</span>
-            Tap to take or choose a photo
+            Tap to take photo or choose from gallery
           </label>
         )}
-        <input id={fileInputId} type="file" accept="image/*" capture="environment" onChange={handlePhotoSelect} style={{ display: "none" }} />
+        {/* No capture attribute — lets Android show both camera and gallery options */}
+        <input id={fileInputId} type="file" accept="image/*" onChange={handlePhotoSelect} style={{ display: "none" }} />
       </div>
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={S.label}>What was done</label>
-        <select style={S.input} value={form.alertId} onChange={e => setForm(f => ({ ...f, alertId: e.target.value }))}>
-          {alerts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-          <option value="">Other / not listed</option>
-        </select>
-      </div>
-
+      {/* Date, odometer at service */}
       <div style={{ ...S.row, marginBottom: 12 }}>
         <div style={{ flex: 1 }}>
-          <label style={S.label}>Date</label>
+          <label style={S.label}>Date of Service</label>
           <input type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
         </div>
         <div style={{ flex: 1 }}>
           <label style={S.label}>Odometer at Service (km)</label>
-          <input type="number" style={S.input} value={form.odometerKm} onChange={e => setForm(f => ({ ...f, odometerKm: e.target.value }))} />
+          <input type="number" inputMode="numeric" style={S.input} placeholder="e.g. 49500" value={form.odometerKm} onChange={e => setForm(f => ({ ...f, odometerKm: e.target.value }))} />
         </div>
       </div>
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={S.label}>Notes (optional)</label>
-        <input style={S.input} placeholder="e.g. synthetic oil, garage name..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+      {/* Next service due km — taken directly from the sticker */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={S.label}>Next Service Due (km) — from sticker</label>
+        <input type="number" inputMode="numeric" style={{ ...S.input, color: C.cyan, fontWeight: 700 }} placeholder="e.g. 52000" value={form.nextServiceKm} onChange={e => setForm(f => ({ ...f, nextServiceKm: e.target.value }))} />
+        {form.nextServiceKm && form.odometerKm && (
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+            That's {(Number(form.nextServiceKm) - Number(form.odometerKm)).toLocaleString()} km from now
+          </div>
+        )}
+      </div>
+
+      {/* What alert this service resets */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={S.label}>Which maintenance alert does this reset?</label>
+        <select style={S.input} value={form.alertId} onChange={e => setForm(f => ({ ...f, alertId: e.target.value }))}>
+          <option value="">None / don't reset an alert</option>
+          {alerts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+        </select>
+      </div>
+
+      {/* Sticker checklist — what was actually done */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={S.label}>What was done (tick from sticker)</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          {STICKER_ITEMS.map(item => {
+            const checked = (form.itemsDone || []).includes(item);
+            return (
+              <label key={item} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: checked ? C.text : C.muted, cursor: "pointer", padding: "6px 10px", borderRadius: 6, background: checked ? C.green + "18" : C.faint, border: `1px solid ${checked ? C.green + "44" : C.border}` }}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    setForm(f => {
+                      const current = f.itemsDone || [];
+                      return { ...f, itemsDone: checked ? current.filter(i => i !== item) : [...current, item] };
+                    });
+                  }}
+                  style={{ accentColor: C.green }}
+                />
+                {item}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Service type and garage */}
+      <div style={{ ...S.row, marginBottom: 14 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Service Type</label>
+          <select style={S.input} value={form.serviceType || "A"} onChange={e => setForm(f => ({ ...f, serviceType: e.target.value }))}>
+            <option>A</option>
+            <option>B</option>
+            <option>C</option>
+            <option>Full</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div style={{ flex: 2 }}>
+          <label style={S.label}>Garage / Fitment Centre</label>
+          <input style={S.input} placeholder="e.g. Transerv Fitment Centre" value={form.garage || ""} onChange={e => setForm(f => ({ ...f, garage: e.target.value }))} />
+        </div>
       </div>
 
       {form.alertId && (
-        <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
-          Saving this will also mark "{alerts.find(a => a.id === form.alertId)?.label}" as done at {form.odometerKm || "0"} km.
+        <div style={{ fontSize: 11, color: C.muted, marginBottom: 14, background: C.green + "11", borderRadius: 6, padding: "8px 10px" }}>
+          ✓ Saving this will reset "{alerts.find(a => a.id === form.alertId)?.label}" countdown
+          {form.nextServiceKm ? ` — next due at ${Number(form.nextServiceKm).toLocaleString()} km (from sticker)` : ` — last done marked at ${form.odometerKm || "0"} km`}.
         </div>
       )}
 
@@ -980,7 +1040,7 @@ function Maintenance({
                   style={{ ...S.btn(C.green), padding: "5px 12px", fontSize: 11 }}
                   onClick={() => {
                     setShowServiceForm(isAdding ? null : car.id);
-                    setServiceForm({ alertId: car.alerts?.[0]?.id || "", date: today(), odometerKm: String(km), notes: "", photoFile: null, photoPreview: null });
+                    setServiceForm({ alertId: car.alerts?.[0]?.id || "", date: today(), odometerKm: String(km), nextServiceKm: "", itemsDone: [], serviceType: "A", garage: "", notes: "", photoFile: null, photoPreview: null });
                   }}
                 >
                   {isAdding ? "Cancel" : "📷 Add Service Record"}
@@ -1205,7 +1265,7 @@ export default function App({ session }) {
   const [editingOdoCarId, setEditingOdoCarId] = useState(null);
   const [odoForm, setOdoForm] = useState({ reading: "", date: today() });
   const [showServiceForm, setShowServiceForm] = useState(null); // holds the car.id currently adding a record, or null
-  const [serviceForm, setServiceForm] = useState({ alertId: "", date: today(), odometerKm: "", notes: "", photoFile: null, photoPreview: null });
+  const [serviceForm, setServiceForm] = useState({ alertId: "", date: today(), odometerKm: "", nextServiceKm: "", itemsDone: [], serviceType: "A", garage: "", notes: "", photoFile: null, photoPreview: null });
 
   function toast_(m) { setToast(m); setTimeout(() => setToast(""), 2500); }
   const carColor = (id) => cars.find(c => c.id === id)?.color || C.muted;
@@ -1481,15 +1541,25 @@ export default function App({ session }) {
     }
 
     const matchedAlert = (car.alerts || []).find(a => a.id === serviceForm.alertId);
+
+    // Build notes from sticker fields so all the info is preserved
+    const stickerDetails = [
+      serviceForm.garage && `Garage: ${serviceForm.garage}`,
+      serviceForm.serviceType && `Service type: ${serviceForm.serviceType}`,
+      serviceForm.itemsDone?.length && `Done: ${serviceForm.itemsDone.join(", ")}`,
+      serviceForm.nextServiceKm && `Next service due: ${Number(serviceForm.nextServiceKm).toLocaleString()} km`,
+      serviceForm.notes,
+    ].filter(Boolean).join(" · ");
+
     const row = {
       user_id: userId,
       car_id: car.id,
       alert_id: serviceForm.alertId || null,
-      alert_label: matchedAlert ? matchedAlert.label : "Service",
+      alert_label: matchedAlert ? matchedAlert.label : (serviceForm.serviceType ? `Type ${serviceForm.serviceType} Service` : "Service"),
       date: serviceForm.date,
       odometer_km: Number(serviceForm.odometerKm),
       photo_url: photoUrl,
-      notes: serviceForm.notes,
+      notes: stickerDetails || null,
     };
 
     const { data, error } = await supabase.from("service_records").insert(row).select().single();
@@ -1500,16 +1570,27 @@ export default function App({ session }) {
     }
     setServiceRecords(r => [data, ...r]);
 
-    // Auto-update the matching maintenance alert, same as "Mark Done"
+    // Auto-update the matching maintenance alert
+    // If sticker has a "Next Service Due" km, use that to set the interval more accurately
     if (serviceForm.alertId) {
-      const newAlerts = (car.alerts || []).map(a => a.id === serviceForm.alertId ? { ...a, lastDoneKm: Number(serviceForm.odometerKm) } : a);
+      const currentKm = Number(serviceForm.odometerKm);
+      const nextKm = Number(serviceForm.nextServiceKm);
+      const newAlerts = (car.alerts || []).map(a => {
+        if (a.id !== serviceForm.alertId) return a;
+        const updated = { ...a, lastDoneKm: currentKm };
+        // If sticker gives next service km, recalculate the interval from it
+        if (nextKm && nextKm > currentKm) {
+          updated.intervalKm = nextKm - currentKm;
+        }
+        return updated;
+      });
       const { error: alertError } = await supabase.from("cars").update({ alerts: newAlerts }).eq("id", car.id);
       if (!alertError) setCars(c => c.map(x => x.id === car.id ? { ...x, alerts: newAlerts } : x));
     }
 
     toast_("✓ Service record saved");
     setShowServiceForm(null);
-    setServiceForm({ alertId: "", date: today(), odometerKm: "", notes: "", photoFile: null, photoPreview: null });
+    setServiceForm({ alertId: "", date: today(), odometerKm: "", nextServiceKm: "", itemsDone: [], serviceType: "A", garage: "", notes: "", photoFile: null, photoPreview: null });
     setSyncing(false);
   }
 
