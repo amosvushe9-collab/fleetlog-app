@@ -624,6 +624,7 @@ function IncidentForm({ form, setForm, cars, syncing, uploading, onSave, onCance
 }
 
 
+function NewCarForm({ newCar, setNewCar, syncing, onSave, onCancel }) {
   return (
     <div style={{ ...S.card, maxWidth: 420, marginBottom: 16, borderColor: C.cyan + "44" }}>
       <div style={{ fontWeight: 700, color: C.cyan, marginBottom: 14 }}>New Car</div>
