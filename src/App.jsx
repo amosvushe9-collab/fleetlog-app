@@ -478,7 +478,13 @@ function CostForm({ cForm, setCForm, cars, editingCostId, syncing, onSave, onCan
   );
 }
 
-function DocForm({ form, setForm, cars, syncing, onSave, onCancel }) {
+function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel }) {
+  const fileInputId = `doc-photo-${form.carId}`;
+  function handlePhotoSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setForm(f => ({ ...f, photoFile: file, photoPreview: URL.createObjectURL(file) }));
+  }
   return (
     <div style={{ ...S.card, maxWidth: 500, marginBottom: 16, borderColor: C.cyan + "44" }}>
       <div style={{ fontWeight: 700, color: C.cyan, marginBottom: 14 }}>Add Document</div>
@@ -503,15 +509,121 @@ function DocForm({ form, setForm, cars, syncing, onSave, onCancel }) {
         </div>
       </div>
       {form.expiry && (() => { const st = docStatus(form.expiry); return <div style={{ background: C.faint, borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: st.color, fontWeight: 600 }}>{st.label}</div>; })()}
+      <div style={{ marginBottom: 14 }}>
+        <label style={S.label}>Licence Disc Photo (optional)</label>
+        {form.photoPreview ? (
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <img src={form.photoPreview} alt="Disc" style={{ width: 100, height: 100, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.border}` }} />
+            <button onClick={() => setForm(f => ({ ...f, photoFile: null, photoPreview: null }))}
+              style={{ position: "absolute", top: 4, right: 4, background: "#000a", color: "#fff", border: "none", borderRadius: 99, width: 20, height: 20, cursor: "pointer", fontSize: 11 }}>✕</button>
+          </div>
+        ) : (
+          <label htmlFor={fileInputId} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 14px", border: `1px dashed ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.muted, fontSize: 12 }}>
+            📎 Attach disc photo
+          </label>
+        )}
+        <input id={fileInputId} type="file" accept="image/*" onChange={handlePhotoSelect} style={{ display: "none" }} />
+      </div>
       <div style={S.row}>
-        <button style={S.btn()} onClick={onSave} disabled={syncing}>{syncing ? "Saving..." : "Save"}</button>
+        <button style={S.btn()} onClick={onSave} disabled={syncing || uploading}>{uploading ? "Uploading..." : syncing ? "Saving..." : "Save"}</button>
         <button style={S.ghost} onClick={onCancel}>Cancel</button>
       </div>
     </div>
   );
 }
 
-function NewCarForm({ newCar, setNewCar, syncing, onSave, onCancel }) {
+const INCIDENT_STATUSES = ["Quoted", "Approved", "In Repair", "Done"];
+
+function IncidentForm({ form, setForm, cars, syncing, uploading, onSave, onCancel }) {
+  const fileInputId = "incident-photos-input";
+
+  function handlePhotosSelect(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const previews = files.map(f => ({ file: f, preview: URL.createObjectURL(f) }));
+    setForm(f => ({ ...f, photoFiles: [...(f.photoFiles || []), ...previews] }));
+    e.target.value = "";
+  }
+
+  function removePhoto(i) {
+    setForm(f => ({ ...f, photoFiles: f.photoFiles.filter((_, idx) => idx !== i) }));
+  }
+
+  return (
+    <div style={{ ...S.card, maxWidth: 540, marginBottom: 16, borderColor: C.red + "44" }}>
+      <div style={{ fontWeight: 700, color: C.red, marginBottom: 14 }}>🚗 Log Accident / Damage</div>
+
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}><label style={S.label}>Car</label>
+          <select style={S.input} value={form.carId} onChange={e => setForm(f => ({ ...f, carId: e.target.value }))}>
+            {cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1 }}><label style={S.label}>Date of Incident</label>
+          <input type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={S.label}>What happened</label>
+        <input style={S.input} placeholder="e.g. Rear-ended at intersection on Harare Drive" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+      </div>
+
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}><label style={S.label}>Repair Shop</label>
+          <input style={S.input} placeholder="e.g. Panel beaters name" value={form.repairShop} onChange={e => setForm(f => ({ ...f, repairShop: e.target.value }))} />
+        </div>
+        <div style={{ flex: 1 }}><label style={S.label}>Status</label>
+          <select style={S.input} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+            {INCIDENT_STATUSES.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Quotation Amount ($)</label>
+          <input type="number" inputMode="numeric" style={S.input} placeholder="0.00" value={form.quotationAmount} onChange={e => setForm(f => ({ ...f, quotationAmount: e.target.value }))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Actual Repair Cost ($)</label>
+          <input type="number" inputMode="numeric" style={{ ...S.input, color: form.repairAmount ? C.red : C.muted }} placeholder="fill when done" value={form.repairAmount} onChange={e => setForm(f => ({ ...f, repairAmount: e.target.value }))} />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={S.label}>Notes</label>
+        <input style={S.input} placeholder="insurance claim number, fault details, etc." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={S.label}>Damage / Quotation Photos</label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+          {(form.photoFiles || []).map((p, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              <img src={p.preview} alt={`damage ${i + 1}`} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 6, border: `1px solid ${C.border}` }} />
+              <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 2, right: 2, background: "#000a", color: "#fff", border: "none", borderRadius: 99, width: 18, height: 18, cursor: "pointer", fontSize: 10 }}>✕</button>
+            </div>
+          ))}
+          <label htmlFor={fileInputId} style={{ width: 80, height: 80, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, border: `1px dashed ${C.border}`, borderRadius: 6, cursor: "pointer", color: C.muted, fontSize: 10 }}>
+            <span style={{ fontSize: 20 }}>📷</span>Add
+          </label>
+        </div>
+        <input id={fileInputId} type="file" accept="image/*" multiple onChange={handlePhotosSelect} style={{ display: "none" }} />
+        <div style={{ fontSize: 10, color: C.muted }}>Tap the camera to add photos — camera or gallery, multiple allowed</div>
+      </div>
+
+      <div style={S.row}>
+        <button style={S.btn(C.red)} onClick={onSave} disabled={syncing || uploading}>
+          {uploading ? "Uploading photos..." : syncing ? "Saving..." : "Save Incident"}
+        </button>
+        <button style={S.ghost} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+
   return (
     <div style={{ ...S.card, maxWidth: 420, marginBottom: 16, borderColor: C.cyan + "44" }}>
       <div style={{ fontWeight: 700, color: C.cyan, marginBottom: 14 }}>New Car</div>
@@ -1105,7 +1217,9 @@ function Maintenance({
   );
 }
 
-function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, syncing, onSaveDoc }) {
+function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, syncing, uploading, onSaveDoc,
+  incidents, setIncidents, incidentForm, setIncidentForm, showIncidentForm, setShowIncidentForm,
+  onSaveIncident, updateIncidentStatus, carName, carColor }) {
   const grouped = cars.map(car => {
     const carDocs = docs.filter(d => d.car_id === car.id);
     // Group by document type, sort each group newest-expiry-first so [0] is always "current"
@@ -1126,7 +1240,7 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
       </div>
 
       {showForm && (
-        <DocForm form={form} setForm={setForm} cars={cars} syncing={syncing} onSave={onSaveDoc} onCancel={() => setShowForm(false)} />
+        <DocForm form={form} setForm={setForm} cars={cars} syncing={syncing} uploading={uploading} onSave={onSaveDoc} onCancel={() => setShowForm(false)} />
       )}
 
       {grouped.map(({ car, byType }) => (
@@ -1167,6 +1281,92 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
           })}
         </div>
       ))}
+
+      {/* Accident / Damage Records */}
+      <div style={{ marginTop: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: C.red }}>🚗 Accidents & Damage</div>
+            <div style={{ fontSize: 12, color: C.muted }}>Repair quotations, status, and photos</div>
+          </div>
+          <button style={S.btn(C.red)} onClick={() => setShowIncidentForm(v => !v)}>+ Log Incident</button>
+        </div>
+
+        {showIncidentForm && (
+          <IncidentForm
+            form={incidentForm} setForm={setIncidentForm} cars={cars}
+            syncing={syncing} uploading={uploading}
+            onSave={onSaveIncident} onCancel={() => setShowIncidentForm(false)}
+          />
+        )}
+
+        {incidents.length === 0 && !showIncidentForm && (
+          <div style={{ ...S.card, color: C.muted, fontSize: 13 }}>No incidents logged yet.</div>
+        )}
+
+        {incidents.map(inc => {
+          const statusColor = inc.status === "Done" ? C.green : inc.status === "In Repair" ? C.cyan : inc.status === "Approved" ? C.amber : C.red;
+          return (
+            <div key={inc.id} style={{ ...S.card, marginBottom: 12, borderLeft: `4px solid ${statusColor}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{inc.description}</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    <span style={{ color: carColor(inc.car_id), fontWeight: 600 }}>{carName(inc.car_id)}</span>
+                    {" · "}{inc.date}{inc.repair_shop ? ` · ${inc.repair_shop}` : ""}
+                  </div>
+                </div>
+                <select
+                  value={inc.status}
+                  onChange={e => updateIncidentStatus(inc.id, e.target.value)}
+                  style={{ ...S.input, width: "auto", fontSize: 11, padding: "4px 8px", color: statusColor, borderColor: statusColor + "44" }}
+                >
+                  {INCIDENT_STATUSES.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div style={{ ...S.row, marginBottom: inc.photo_urls?.length ? 10 : 0 }}>
+                {inc.quotation_amount && (
+                  <div style={{ background: C.faint, borderRadius: 6, padding: "6px 10px", fontSize: 12 }}>
+                    <div style={{ color: C.muted, fontSize: 10, marginBottom: 2 }}>QUOTATION</div>
+                    <div style={{ color: C.amber, fontWeight: 700, fontFamily: "monospace" }}>{fmt(inc.quotation_amount)}</div>
+                  </div>
+                )}
+                {inc.repair_amount && (
+                  <div style={{ background: C.faint, borderRadius: 6, padding: "6px 10px", fontSize: 12 }}>
+                    <div style={{ color: C.muted, fontSize: 10, marginBottom: 2 }}>ACTUAL COST</div>
+                    <div style={{ color: C.red, fontWeight: 700, fontFamily: "monospace" }}>{fmt(inc.repair_amount)}</div>
+                  </div>
+                )}
+                {inc.quotation_amount && inc.repair_amount && (
+                  <div style={{ background: C.faint, borderRadius: 6, padding: "6px 10px", fontSize: 12 }}>
+                    <div style={{ color: C.muted, fontSize: 10, marginBottom: 2 }}>VARIANCE</div>
+                    <div style={{ color: inc.repair_amount > inc.quotation_amount ? C.red : C.green, fontWeight: 700, fontFamily: "monospace" }}>
+                      {inc.repair_amount > inc.quotation_amount ? "+" : ""}{fmt(inc.repair_amount - inc.quotation_amount)}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {inc.photo_urls?.length > 0 && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                  {inc.photo_urls.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                      <img src={url} alt={`damage ${i + 1}`} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6, border: `1px solid ${C.border}` }} />
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              {inc.notes && <div style={{ fontSize: 11, color: C.muted }}>{inc.notes}</div>}
+
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <button onClick={() => del("incidents", inc.id, setIncidents)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer", fontSize: 11 }}>Delete</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1239,6 +1439,7 @@ export default function App({ session }) {
   const [costs, setCosts] = useState([]);
   const [docs, setDocs]   = useState([]);
   const [serviceRecords, setServiceRecords] = useState([]);
+  const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -1266,6 +1467,9 @@ export default function App({ session }) {
   const [odoForm, setOdoForm] = useState({ reading: "", date: today() });
   const [showServiceForm, setShowServiceForm] = useState(null); // holds the car.id currently adding a record, or null
   const [serviceForm, setServiceForm] = useState({ alertId: "", date: today(), odometerKm: "", nextServiceKm: "", itemsDone: [], serviceType: "A", garage: "", notes: "", photoFile: null, photoPreview: null });
+  const blankIncident = () => ({ carId: cars[0]?.id || "", date: today(), description: "", repairShop: "", status: "Quoted", quotationAmount: "", repairAmount: "", notes: "", photoFiles: [] });
+  const [incidentForm, setIncidentForm] = useState({ carId: "", date: today(), description: "", repairShop: "", status: "Quoted", quotationAmount: "", repairAmount: "", notes: "", photoFiles: [] });
+  const [showIncidentForm, setShowIncidentForm] = useState(false);
 
   function toast_(m) { setToast(m); setTimeout(() => setToast(""), 2500); }
   const carColor = (id) => cars.find(c => c.id === id)?.color || C.muted;
@@ -1275,18 +1479,20 @@ export default function App({ session }) {
   useEffect(() => {
     async function fetchAll() {
       setLoading(true);
-      const [carsRes, weeksRes, costsRes, docsRes, serviceRes] = await Promise.all([
+      const [carsRes, weeksRes, costsRes, docsRes, serviceRes, incidentRes] = await Promise.all([
         supabase.from("cars").select("*").eq("user_id", userId).order("created_at"),
         supabase.from("weeks").select("*").eq("user_id", userId).order("week_start", { ascending: false }),
         supabase.from("costs").select("*").eq("user_id", userId).order("date", { ascending: false }),
         supabase.from("docs").select("*").eq("user_id", userId).order("expiry"),
         supabase.from("service_records").select("*").eq("user_id", userId).order("date", { ascending: false }),
+        supabase.from("incidents").select("*").eq("user_id", userId).order("date", { ascending: false }),
       ]);
       if (carsRes.data)  setCars(carsRes.data);
       if (weeksRes.data) setWeeks(weeksRes.data);
       if (costsRes.data) setCosts(costsRes.data);
       if (docsRes.data)  setDocs(docsRes.data);
       if (serviceRes.data) setServiceRecords(serviceRes.data);
+      if (incidentRes.data) setIncidents(incidentRes.data);
       setLoading(false);
     }
     fetchAll();
@@ -1497,15 +1703,70 @@ export default function App({ session }) {
   async function handleSaveDoc() {
     if (!docForm.carId || !docForm.type || !docForm.expiry) return;
     setSyncing(true);
-    const row = { car_id: docForm.carId, user_id: userId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes };
+    let photoUrl = null;
+    if (docForm.photoFile) {
+      setUploadingPhoto(true);
+      const ext = docForm.photoFile.name.split(".").pop() || "jpg";
+      const path = `${userId}/${docForm.carId}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("doc-photos").upload(path, docForm.photoFile);
+      setUploadingPhoto(false);
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage.from("doc-photos").getPublicUrl(path);
+        photoUrl = urlData?.publicUrl || null;
+      }
+    }
+    const row = { car_id: docForm.carId, user_id: userId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, photo_url: photoUrl };
     const { data, error } = await supabase.from("docs").insert(row).select().single();
     if (!error) {
       setDocs(d => [...d, data].sort((a, b) => new Date(a.expiry) - new Date(b.expiry)));
       toast_("✓ Document saved");
       setShowDocForm(false);
-      setDocForm(f => ({ ...f, expiry: "", notes: "" }));
+      setDocForm(f => ({ ...f, expiry: "", notes: "", photoFile: null, photoPreview: null }));
     } else toast_("Error saving");
     setSyncing(false);
+  }
+
+  async function handleSaveIncident() {
+    if (!incidentForm.carId || !incidentForm.date || !incidentForm.description) {
+      toast_("Add a date and description first"); return;
+    }
+    setSyncing(true);
+    const photoUrls = [];
+    if (incidentForm.photoFiles?.length) {
+      setUploadingPhoto(true);
+      for (const { file } of incidentForm.photoFiles) {
+        const ext = file.name.split(".").pop() || "jpg";
+        const path = `${userId}/${incidentForm.carId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("incident-photos").upload(path, file);
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from("incident-photos").getPublicUrl(path);
+          if (urlData?.publicUrl) photoUrls.push(urlData.publicUrl);
+        }
+      }
+      setUploadingPhoto(false);
+    }
+    const row = {
+      user_id: userId, car_id: incidentForm.carId, date: incidentForm.date,
+      description: incidentForm.description, repair_shop: incidentForm.repairShop,
+      status: incidentForm.status,
+      quotation_amount: incidentForm.quotationAmount ? Number(incidentForm.quotationAmount) : null,
+      repair_amount: incidentForm.repairAmount ? Number(incidentForm.repairAmount) : null,
+      photo_urls: photoUrls.length ? photoUrls : null,
+      notes: incidentForm.notes,
+    };
+    const { data, error } = await supabase.from("incidents").insert(row).select().single();
+    if (!error) {
+      setIncidents(i => [data, ...i]);
+      toast_("✓ Incident logged");
+      setShowIncidentForm(false);
+      setIncidentForm({ carId: cars[0]?.id || "", date: today(), description: "", repairShop: "", status: "Quoted", quotationAmount: "", repairAmount: "", notes: "", photoFiles: [] });
+    } else toast_("Error saving");
+    setSyncing(false);
+  }
+
+  async function updateIncidentStatus(id, status) {
+    const { error } = await supabase.from("incidents").update({ status }).eq("id", id);
+    if (!error) setIncidents(i => i.map(x => x.id === id ? { ...x, status } : x));
   }
 
   async function togglePaid(id, current) {
@@ -1697,8 +1958,13 @@ export default function App({ session }) {
         <Docs
           docs={docs} cars={cars} del={del} setDocs={setDocs}
           showForm={showDocForm} setShowForm={setShowDocForm}
-          form={docForm} setForm={setDocForm} syncing={syncing}
+          form={docForm} setForm={setDocForm} syncing={syncing} uploading={uploadingPhoto}
           onSaveDoc={handleSaveDoc}
+          incidents={incidents} setIncidents={setIncidents}
+          incidentForm={incidentForm} setIncidentForm={setIncidentForm}
+          showIncidentForm={showIncidentForm} setShowIncidentForm={setShowIncidentForm}
+          onSaveIncident={handleSaveIncident} updateIncidentStatus={updateIncidentStatus}
+          carName={carName} carColor={carColor}
         />
       )}
 
