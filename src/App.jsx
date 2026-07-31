@@ -223,20 +223,21 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
         headers.forEach((h, i) => { row[h] = values[i]; });
 
         const kmKey = Object.keys(row).find(k => /mileage/i.test(k));
-        const costKey = Object.keys(row).find(k => /cost/i.test(k));
         const startKey = Object.keys(row).find(k => /start/i.test(k));
         const endKey = Object.keys(row).find(k => /end/i.test(k));
         const nameKey = Object.keys(row).find(k => /device/i.test(k));
 
         const km = kmKey ? parseFloat(row[kmKey]) : NaN;
-        const fuelCost = costKey ? parseFloat(row[costKey]) : NaN;
         if (isNaN(km)) throw new Error("Found the file but couldn't read a mileage number from it");
 
+        const deviceName = nameKey ? row[nameKey] : "Vehicle";
+
         setCsvInfo({
-          km, fuelCost,
+          km,
           startDate: startKey ? row[startKey] : "",
           endDate: endKey ? row[endKey] : "",
-          deviceName: nameKey ? row[nameKey] : "Vehicle",
+          deviceName,
+          carMatched: matchedCar ? matchedCar.name : null,
         });
 
         const rawStart = startKey ? row[startKey] : "";
@@ -258,6 +259,12 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
         }
         setCsvDateWarning(dateWarning);
 
+        // Try to match device name to a car — check if any car name appears in the device name or vice versa
+        const matchedCar = cars.find(c =>
+          deviceName.toLowerCase().includes(c.name.toLowerCase()) ||
+          c.name.toLowerCase().includes(deviceName.toLowerCase())
+        );
+
         // CSV gives one total for the range — always goes into total-only mode with real start/end dates
         setWForm(f => ({
           ...f,
@@ -266,6 +273,8 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
           weekEnd: endDateOnly && !isNaN(new Date(endDateOnly)) ? endDateOnly : f.weekEnd,
           totalKm: String(km),
           days: Array(7).fill(""),
+          // Only auto-switch car if we found a confident match
+          ...(matchedCar ? { carId: matchedCar.id } : {}),
         }));
       } catch (err) {
         setCsvError(err.message || "Couldn't read that file — make sure it's the SinoTrack mileage export CSV");
@@ -303,15 +312,19 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
             <div style={{ fontSize: 10, color: C.muted }}>
               {csvInfo.startDate} → {csvInfo.endDate} · dates set automatically below
             </div>
+            {csvInfo.carMatched && (
+              <div style={{ fontSize: 10, color: C.green, marginTop: 4 }}>
+                ✓ Car auto-selected: {csvInfo.carMatched}
+              </div>
+            )}
+            {!csvInfo.carMatched && (
+              <div style={{ fontSize: 10, color: C.amber, marginTop: 4 }}>
+                ⚠ Couldn't match device name to a car — please select the car manually below.
+              </div>
+            )}
             {csvDateWarning && (
               <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
                 ℹ {csvDateWarning}
-              </div>
-            )}
-            {!isNaN(csvInfo.fuelCost) && (
-              <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
-                SinoTrack estimates {fmt(csvInfo.fuelCost)} fuel cost for this range — this is a calculated
-                estimate, not a real receipt, so it's shown for reference only and not auto-filled into your costs.
               </div>
             )}
           </div>
