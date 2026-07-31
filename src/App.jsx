@@ -65,6 +65,7 @@ function currentOdometer(car, weeks) {
 
 const DOC_TYPES = ["Insurance (Full Cover)", "Insurance (Third Party)", "ZINARA / Vehicle Licence", "Roadworthy Certificate", "Other"];
 const COST_CATS = ["Service & Insurance", "Tyres", "Repairs", "Accessories", "Safety", "Electronics", "Other"];
+const INCIDENT_STATUSES = ["Quoted", "Approved", "In Repair", "Done"];
 
 const DEFAULT_ALERTS = () => [
   { id: uid(), label: "Oil & Filter", intervalKm: 5000, lastDoneKm: 0 },
@@ -544,8 +545,6 @@ function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel }) 
     </div>
   );
 }
-
-const INCIDENT_STATUSES = ["Quoted", "Approved", "In Repair", "Done"];
 
 function IncidentForm({ form, setForm, cars, syncing, uploading, onSave, onCancel }) {
   const fileInputId = "incident-photos-input";
