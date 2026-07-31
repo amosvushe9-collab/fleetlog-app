@@ -2,11 +2,11 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from './supabase.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const uid = () => crypto.randomUUID()
-const fmt = (n) => `$${Number(n || 0).toFixed(2)}`;
-const fmtKm = (n) => `${Number(n || 0).toFixed(0)} km`;
-const fmtRate = (n) => `$${Number(n || 0).toFixed(3)}/km`;
-const today = () => new Date().toISOString().slice(0, 10);
+function uid() { return crypto.randomUUID(); }
+function fmt(n) { return "$" + Number(n || 0).toFixed(2); }
+function fmtKm(n) { return Number(n || 0).toFixed(0) + " km"; }
+function fmtRate(n) { return "$" + Number(n || 0).toFixed(3) + "/km"; }
+function today() { return new Date().toISOString().slice(0, 10); }
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function getMondayStr(ref) {
@@ -26,33 +26,30 @@ function addDaysStr(dateStr, days) {
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
-// Formats a date range. Falls back gracefully if week_end isn't set (older rows).
 function fmtWeekRange(startStr, endStr) {
   const start = new Date(startStr);
   const end = new Date(endStr || addDaysStr(startStr, 6));
   const opts = { day: "numeric", month: "short" };
-  return `${start.toLocaleDateString("en-GB", opts)} – ${end.toLocaleDateString("en-GB", { ...opts, year: "numeric" })}`;
+  return start.toLocaleDateString("en-GB", opts) + " \u2013 " + end.toLocaleDateString("en-GB", { ...opts, year: "numeric" });
 }
 function daysUntil(dateStr) {
   return Math.ceil((new Date(dateStr) - new Date(today())) / 86400000);
 }
 function fmtDaysExtra(d) {
   const absD = Math.abs(d);
-  if (absD < 14) return ""; // not worth showing weeks/months for very short spans
+  if (absD < 14) return "";
   const weeks = Math.round(absD / 7);
   const months = absD / 30.44;
-  if (absD < 60) return ` (~${weeks}wk)`;
-  return ` (~${months.toFixed(1)}mo)`;
+  if (absD < 60) return " (~" + weeks + "wk)";
+  return " (~" + months.toFixed(1) + "mo)";
 }
 function docStatus(expiry) {
   const d = daysUntil(expiry);
-  if (d < 0)   return { label: `Expired ${Math.abs(d)}d ago${fmtDaysExtra(d)}`, color: "#ef4444", level: "expired" };
-  if (d <= 7)  return { label: `Expires in ${d}d — urgent!`, color: "#ef4444", level: "critical" };
-  if (d <= 30) return { label: `Expires in ${d}d${fmtDaysExtra(d)}`, color: "#f59e0b", level: "soon" };
-  return { label: `Valid · ${d}d left${fmtDaysExtra(d)}`, color: "#22c55e", level: "ok" };
+  if (d < 0)   return { label: "Expired " + Math.abs(d) + "d ago" + fmtDaysExtra(d), color: "#ef4444", level: "expired" };
+  if (d <= 7)  return { label: "Expires in " + d + "d \u2014 urgent!", color: "#ef4444", level: "critical" };
+  if (d <= 30) return { label: "Expires in " + d + "d" + fmtDaysExtra(d), color: "#f59e0b", level: "soon" };
+  return { label: "Valid \u00b7 " + d + "d left" + fmtDaysExtra(d), color: "#22c55e", level: "ok" };
 }
-
-// True odometer = baseline reading + every week's km logged on/after the baseline date
 function currentOdometer(car, weeks) {
   const baseline = Number(car.odometer_baseline || 0);
   const baselineDate = car.odometer_baseline_date;
@@ -62,16 +59,24 @@ function currentOdometer(car, weeks) {
     .reduce((s, w) => s + Number(w.km || 0), 0);
   return baseline + countedKm;
 }
+function monthKey(dateStr) { return dateStr ? dateStr.slice(0, 7) : ""; }
+function monthLabel(key) {
+  if (key === "all") return "All Time";
+  const parts = key.split("-").map(Number);
+  return new Date(parts[0], parts[1] - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
 
 const DOC_TYPES = ["Insurance (Full Cover)", "Insurance (Third Party)", "ZINARA / Vehicle Licence", "Roadworthy Certificate", "Other"];
 const COST_CATS = ["Service & Insurance", "Tyres", "Repairs", "Accessories", "Safety", "Electronics", "Other"];
 const INCIDENT_STATUSES = ["Quoted", "Approved", "In Repair", "Done"];
 
-const DEFAULT_ALERTS = () => [
-  { id: uid(), label: "Oil & Filter", intervalKm: 5000, lastDoneKm: 0 },
-  { id: uid(), label: "Tyre Rotation", intervalKm: 10000, lastDoneKm: 0 },
-  { id: uid(), label: "Full Service", intervalKm: 20000, lastDoneKm: 0 },
-];
+function DEFAULT_ALERTS() {
+  return [
+    { id: uid(), label: "Oil & Filter", intervalKm: 5000, lastDoneKm: 0 },
+    { id: uid(), label: "Tyre Rotation", intervalKm: 10000, lastDoneKm: 0 },
+    { id: uid(), label: "Full Service", intervalKm: 20000, lastDoneKm: 0 },
+  ];
+}
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 const C = {
@@ -828,15 +833,6 @@ function ServiceRecordForm({ car, alerts, form, setForm, syncing, uploading, onS
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE COMPONENTS
 // ════════════════════════════════════════════════════════════════════════════
-
-function monthKey(dateStr) {
-  return dateStr ? dateStr.slice(0, 7) : ""; // "YYYY-MM"
-}
-function monthLabel(key) {
-  if (key === "all") return "All Time";
-  const [y, m] = key.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-}
 
 function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView }) {
   // Build the list of months that actually have data, newest first, plus "All Time"
