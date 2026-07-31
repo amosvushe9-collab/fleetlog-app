@@ -90,7 +90,7 @@ const S = {
   row: { display: "flex", gap: 10, flexWrap: "wrap" },
   label: { color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5, display: "block" },
   input: { background: C.faint, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 14, width: "100%", boxSizing: "border-box", outline: "none" },
-  btn: (bg = C.cyan) => ({ background: bg, color: bg === C.cyan || bg === C.green ? "#000" : "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontWeight: 700, fontSize: 13, cursor: "pointer" }),
+  btn: (bg) => { const b = bg || C.cyan; return { background: b, color: b === C.cyan || b === C.green ? "#000" : "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
   ghost: { background: "transparent", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" },
   th: { color: C.muted, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" },
   td: { padding: "9px 10px", borderBottom: `1px solid ${C.faint}`, verticalAlign: "middle" },
