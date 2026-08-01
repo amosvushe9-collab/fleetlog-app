@@ -86,22 +86,25 @@ const C = {
   red: "#ef4444", purple: "#a855f7",
 };
 
-const S = {
-  app: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Inter','Segoe UI',sans-serif", fontSize: 14 },
-  header: { background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 16px", display: "flex", alignItems: "center", gap: 10, height: 52, position: "sticky", top: 0, zIndex: 100 },
-  logo: { color: C.cyan, fontWeight: 800, fontSize: 17, letterSpacing: "-0.04em" },
-  page: { padding: "16px", maxWidth: 960, margin: "0 auto" },
-  card: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 },
-  row: { display: "flex", gap: 10, flexWrap: "wrap" },
-  label: { color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5, display: "block" },
-  input: { background: C.faint, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 14, width: "100%", boxSizing: "border-box", outline: "none" },
-  btn: (bg) => { const b = bg || C.cyan; return { background: b, color: b === C.cyan || b === C.green ? "#000" : "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
-  ghost: { background: "transparent", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" },
-  th: { color: C.muted, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" },
-  td: { padding: "9px 10px", borderBottom: `1px solid ${C.faint}`, verticalAlign: "middle" },
-  title: { fontSize: 18, fontWeight: 700, color: "#f8fafc", marginBottom: 4 },
-  sub: { color: C.muted, fontSize: 13, marginBottom: 20 },
-};
+function mkS() {
+  return {
+    app: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Inter','Segoe UI',sans-serif", fontSize: 14 },
+    header: { background: C.surface, borderBottom: "1px solid " + C.border, padding: "0 16px", display: "flex", alignItems: "center", gap: 10, height: 52, position: "sticky", top: 0, zIndex: 100 },
+    logo: { color: C.cyan, fontWeight: 800, fontSize: 17, letterSpacing: "-0.04em" },
+    page: { padding: "16px", maxWidth: 960, margin: "0 auto" },
+    card: { background: C.surface, border: "1px solid " + C.border, borderRadius: 12, padding: 16 },
+    row: { display: "flex", gap: 10, flexWrap: "wrap" },
+    label: { color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5, display: "block" },
+    input: { background: C.faint, border: "1px solid " + C.border, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 14, width: "100%", boxSizing: "border-box", outline: "none" },
+    btn: (bg) => { const b = bg || C.cyan; return { background: b, color: b === C.cyan || b === C.green ? "#000" : "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
+    ghost: { background: "transparent", color: C.muted, border: "1px solid " + C.border, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" },
+    th: { color: C.muted, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", padding: "8px 10px", textAlign: "left", borderBottom: "1px solid " + C.border, whiteSpace: "nowrap" },
+    td: { padding: "9px 10px", borderBottom: "1px solid " + C.faint, verticalAlign: "middle" },
+    title: { fontSize: 18, fontWeight: 700, color: "#f8fafc", marginBottom: 4 },
+    sub: { color: C.muted, fontSize: 13, marginBottom: 20 },
+  };
+}
+const S = mkS();
 
 function Stat({ label, value, sub, color = C.cyan, small }) {
   return (
