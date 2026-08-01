@@ -242,13 +242,11 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
 
         const deviceName = nameKey ? row[nameKey] : "Vehicle";
 
-        setCsvInfo({
-          km,
-          startDate: startKey ? row[startKey] : "",
-          endDate: endKey ? row[endKey] : "",
-          deviceName,
-          carMatched: matchedCar ? matchedCar.name : null,
-        });
+        // Declare matchedCar FIRST before any reference to it
+        const matchedCar = cars.find(c =>
+          deviceName.toLowerCase().includes(c.name.toLowerCase()) ||
+          c.name.toLowerCase().includes(deviceName.toLowerCase())
+        );
 
         const rawStart = startKey ? row[startKey] : "";
         const rawEnd = endKey ? row[endKey] : "";
@@ -262,18 +260,20 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
           const dayDiff = Math.round((ed - sd) / 86400000);
           const startDow = sd.getDay();
           if (startDow !== 1) {
-            dateWarning = `This range starts on a ${sd.toLocaleDateString("en-GB", { weekday: "long" })}, not a Monday — that's fine, it's been captured exactly as shown below.`;
+            dateWarning = "This range starts on a " + sd.toLocaleDateString("en-GB", { weekday: "long" }) + ", not a Monday — that's fine, it's been captured exactly as shown below.";
           } else if (dayDiff !== 6) {
-            dateWarning = `This range covers ${dayDiff + 1} days, not a full 7-day week — that's fine, it's been captured exactly as shown below.`;
+            dateWarning = "This range covers " + (dayDiff + 1) + " days, not a full 7-day week — that's fine, it's been captured exactly as shown below.";
           }
         }
         setCsvDateWarning(dateWarning);
 
-        // Try to match device name to a car — check if any car name appears in the device name or vice versa
-        const matchedCar = cars.find(c =>
-          deviceName.toLowerCase().includes(c.name.toLowerCase()) ||
-          c.name.toLowerCase().includes(deviceName.toLowerCase())
-        );
+        setCsvInfo({
+          km,
+          startDate: startKey ? row[startKey] : "",
+          endDate: endKey ? row[endKey] : "",
+          deviceName,
+          carMatched: matchedCar ? matchedCar.name : null,
+        });
 
         // CSV gives one total for the range — always goes into total-only mode with real start/end dates
         setWForm(f => ({
