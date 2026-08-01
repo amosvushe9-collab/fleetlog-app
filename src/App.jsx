@@ -106,11 +106,12 @@ function mkS() {
 }
 const S = mkS();
 
-function Stat({ label, value, sub, color = C.cyan, small }) {
+function Stat({ label, value, sub, color, small }) {
+  const statColor = color || C.cyan;
   return (
     <div style={{ background: C.faint, borderRadius: 10, padding: small ? "10px 14px" : "14px 18px", flex: 1, minWidth: 100 }}>
       <div style={{ color: C.muted, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{label}</div>
-      <div style={{ color, fontWeight: 700, fontSize: small ? 15 : 20, fontFamily: "monospace" }}>{value}</div>
+      <div style={{ color: statColor, fontWeight: 700, fontSize: small ? 15 : 20, fontFamily: "monospace" }}>{value}</div>
       {sub && <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{sub}</div>}
     </div>
   );
