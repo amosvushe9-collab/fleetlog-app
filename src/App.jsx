@@ -838,6 +838,9 @@ function ServiceRecordForm({ car, alerts, form, setForm, syncing, uploading, onS
 // ════════════════════════════════════════════════════════════════════════════
 
 function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView }) {
+  const currentMonthKey = monthKey(today());
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
+
   // Build the list of months that actually have data, newest first, plus "All Time"
   const availableMonths = useMemo(() => {
     const keys = new Set();
@@ -846,11 +849,6 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
     const sorted = [...keys].filter(Boolean).sort().reverse();
     return ["all", ...sorted];
   }, [weeks, costs]);
-
-  const currentMonthKey = monthKey(today());
-  const [selectedMonth, setSelectedMonth] = useState(
-    availableMonths.includes(currentMonthKey) ? currentMonthKey : (availableMonths[0] || "all")
-  );
 
   const monthWeeks = selectedMonth === "all" ? weeks : weeks.filter(w => monthKey(w.week_start) === selectedMonth);
   const monthCosts = selectedMonth === "all" ? costs : costs.filter(c => monthKey(c.date) === selectedMonth);
