@@ -618,20 +618,30 @@ function IncidentForm({ form, setForm, cars, syncing, uploading, onSave, onCance
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <label style={S.label}>Damage / Quotation Photos</label>
+        <label style={S.label}>Damage Photos & Quotation Documents</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-          {(form.photoFiles || []).map((p, i) => (
-            <div key={i} style={{ position: "relative" }}>
-              <img src={p.preview} alt={`damage ${i + 1}`} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 6, border: `1px solid ${C.border}` }} />
-              <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 2, right: 2, background: "#000a", color: "#fff", border: "none", borderRadius: 99, width: 18, height: 18, cursor: "pointer", fontSize: 10 }}>✕</button>
-            </div>
-          ))}
-          <label htmlFor={fileInputId} style={{ width: 80, height: 80, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, border: `1px dashed ${C.border}`, borderRadius: 6, cursor: "pointer", color: C.muted, fontSize: 10 }}>
-            <span style={{ fontSize: 20 }}>📷</span>Add
+          {(form.photoFiles || []).map((p, i) => {
+            const isPdf = p.file.type === "application/pdf" || p.file.name.toLowerCase().endsWith(".pdf");
+            return (
+              <div key={i} style={{ position: "relative" }}>
+                {isPdf ? (
+                  <div style={{ width: 80, height: 80, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, background: C.faint, borderRadius: 6, border: "1px solid " + C.border }}>
+                    <span style={{ fontSize: 24 }}>📄</span>
+                    <div style={{ fontSize: 8, color: C.muted, textAlign: "center", padding: "0 4px", wordBreak: "break-all" }}>{p.file.name.slice(0, 12)}</div>
+                  </div>
+                ) : (
+                  <img src={p.preview} alt={"file " + (i + 1)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid " + C.border }} />
+                )}
+                <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 2, right: 2, background: "#000a", color: "#fff", border: "none", borderRadius: 99, width: 18, height: 18, cursor: "pointer", fontSize: 10 }}>✕</button>
+              </div>
+            );
+          })}
+          <label htmlFor={fileInputId} style={{ width: 80, height: 80, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, border: "1px dashed " + C.border, borderRadius: 6, cursor: "pointer", color: C.muted, fontSize: 10 }}>
+            <span style={{ fontSize: 20 }}>📎</span>Add
           </label>
         </div>
-        <input id={fileInputId} type="file" accept="image/*" multiple onChange={handlePhotosSelect} style={{ display: "none" }} />
-        <div style={{ fontSize: 10, color: C.muted }}>Tap the camera to add photos — camera or gallery, multiple allowed</div>
+        <input id={fileInputId} type="file" accept="image/*,application/pdf" multiple onChange={handlePhotosSelect} style={{ display: "none" }} />
+        <div style={{ fontSize: 10, color: C.muted }}>Photos, PDFs, or quotation documents — multiple allowed</div>
       </div>
 
       <div style={S.row}>
@@ -1369,11 +1379,21 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
 
               {inc.photo_urls?.length > 0 && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                  {inc.photo_urls.map((url, i) => (
-                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                      <img src={url} alt={`damage ${i + 1}`} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6, border: `1px solid ${C.border}` }} />
-                    </a>
-                  ))}
+                  {inc.photo_urls.map((url, i) => {
+                    const isPdf = url.toLowerCase().includes(".pdf") || url.toLowerCase().includes("application%2Fpdf");
+                    return (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                        {isPdf ? (
+                          <div style={{ width: 64, height: 64, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, background: C.faint, borderRadius: 6, border: "1px solid " + C.border }}>
+                            <span style={{ fontSize: 22 }}>📄</span>
+                            <span style={{ fontSize: 8, color: C.cyan }}>View PDF</span>
+                          </div>
+                        ) : (
+                          <img src={url} alt={"file " + (i + 1)} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6, border: "1px solid " + C.border }} />
+                        )}
+                      </a>
+                    );
+                  })}
                 </div>
               )}
 
