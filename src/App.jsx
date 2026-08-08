@@ -839,8 +839,7 @@ function ServiceRecordForm({ car, alerts, form, setForm, syncing, uploading, onS
 // ════════════════════════════════════════════════════════════════════════════
 
 function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView }) {
-  const currentMonthKey = monthKey(today());
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
+  const [selectedMonth, setSelectedMonth] = useState("all");
 
   // Build the list of months that actually have data, newest first, plus "All Time"
   const availableMonths = useMemo(() => {
@@ -1230,7 +1229,7 @@ function Maintenance({
 
 function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, syncing, uploading, onSaveDoc,
   incidents, setIncidents, incidentForm, setIncidentForm, showIncidentForm, setShowIncidentForm,
-  onSaveIncident, updateIncidentStatus, carName, carColor }) {
+  onSaveIncident, updateIncidentStatus, carName, carColor, onStartEditIncident, editingIncidentId }) {
   const grouped = cars.map(car => {
     const carDocs = docs.filter(d => d.car_id === car.id);
     // Group by document type, sort each group newest-expiry-first so [0] is always "current"
@@ -1317,7 +1316,16 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
 
         {incidents.map(inc => {
           const statusColor = inc.status === "Done" ? C.green : inc.status === "In Repair" ? C.cyan : inc.status === "Approved" ? C.amber : C.red;
+          const isEditing = editingIncidentId === inc.id;
           return (
+            <div key={inc.id}>
+              {isEditing && (
+                <IncidentForm
+                  form={incidentForm} setForm={setIncidentForm} cars={cars}
+                  syncing={syncing} uploading={uploading}
+                  onSave={onSaveIncident} onCancel={() => onStartEditIncident(null)}
+                />
+              )}
             <div key={inc.id} style={{ ...S.card, marginBottom: 12, borderLeft: `4px solid ${statusColor}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                 <div>
@@ -1371,9 +1379,11 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
 
               {inc.notes && <div style={{ fontSize: 11, color: C.muted }}>{inc.notes}</div>}
 
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 }}>
+                <button onClick={() => onStartEditIncident(inc)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 11 }}>✎ Edit</button>
                 <button onClick={() => del("incidents", inc.id, setIncidents)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer", fontSize: 11 }}>Delete</button>
               </div>
+            </div>
             </div>
           );
         })}
@@ -1481,6 +1491,7 @@ export default function App({ session }) {
   const blankIncident = () => ({ carId: cars[0]?.id || "", date: today(), description: "", repairShop: "", status: "Quoted", quotationAmount: "", repairAmount: "", notes: "", photoFiles: [] });
   const [incidentForm, setIncidentForm] = useState({ carId: "", date: today(), description: "", repairShop: "", status: "Quoted", quotationAmount: "", repairAmount: "", notes: "", photoFiles: [] });
   const [showIncidentForm, setShowIncidentForm] = useState(false);
+  const [editingIncidentId, setEditingIncidentId] = useState(null);
 
   function toast_(m) { setToast(m); setTimeout(() => setToast(""), 2500); }
   const carColor = (id) => cars.find(c => c.id === id)?.color || C.muted;
@@ -1737,6 +1748,22 @@ export default function App({ session }) {
     setSyncing(false);
   }
 
+  function startEditIncident(inc) {
+    if (!inc) { setEditingIncidentId(null); return; }
+    setEditingIncidentId(inc.id);
+    setIncidentForm({
+      carId: inc.car_id,
+      date: inc.date,
+      description: inc.description || "",
+      repairShop: inc.repair_shop || "",
+      status: inc.status || "Quoted",
+      quotationAmount: inc.quotation_amount ? String(inc.quotation_amount) : "",
+      repairAmount: inc.repair_amount ? String(inc.repair_amount) : "",
+      notes: inc.notes || "",
+      photoFiles: [], // can't re-edit uploaded photos, only add new ones
+    });
+  }
+
   async function handleSaveIncident() {
     if (!incidentForm.carId || !incidentForm.date || !incidentForm.description) {
       toast_("Add a date and description first"); return;
@@ -1756,22 +1783,46 @@ export default function App({ session }) {
       }
       setUploadingPhoto(false);
     }
-    const row = {
-      user_id: userId, car_id: incidentForm.carId, date: incidentForm.date,
-      description: incidentForm.description, repair_shop: incidentForm.repairShop,
-      status: incidentForm.status,
-      quotation_amount: incidentForm.quotationAmount ? Number(incidentForm.quotationAmount) : null,
-      repair_amount: incidentForm.repairAmount ? Number(incidentForm.repairAmount) : null,
-      photo_urls: photoUrls.length ? photoUrls : null,
-      notes: incidentForm.notes,
-    };
-    const { data, error } = await supabase.from("incidents").insert(row).select().single();
-    if (!error) {
-      setIncidents(i => [data, ...i]);
-      toast_("✓ Incident logged");
-      setShowIncidentForm(false);
-      setIncidentForm({ carId: cars[0]?.id || "", date: today(), description: "", repairShop: "", status: "Quoted", quotationAmount: "", repairAmount: "", notes: "", photoFiles: [] });
-    } else toast_("Error saving");
+
+    if (editingIncidentId) {
+      // Update — keep existing photos, append any new ones
+      const existing = incidents.find(i => i.id === editingIncidentId);
+      const existingPhotos = existing?.photo_urls || [];
+      const allPhotos = [...existingPhotos, ...photoUrls];
+      const updates = {
+        car_id: incidentForm.carId, date: incidentForm.date,
+        description: incidentForm.description, repair_shop: incidentForm.repairShop,
+        status: incidentForm.status,
+        quotation_amount: incidentForm.quotationAmount ? Number(incidentForm.quotationAmount) : null,
+        repair_amount: incidentForm.repairAmount ? Number(incidentForm.repairAmount) : null,
+        photo_urls: allPhotos.length ? allPhotos : null,
+        notes: incidentForm.notes,
+      };
+      const { data, error } = await supabase.from("incidents").update(updates).eq("id", editingIncidentId).select().single();
+      if (!error) {
+        setIncidents(i => i.map(x => x.id === editingIncidentId ? data : x));
+        toast_("✓ Incident updated");
+        setEditingIncidentId(null);
+        setIncidentForm({ carId: cars[0]?.id || "", date: today(), description: "", repairShop: "", status: "Quoted", quotationAmount: "", repairAmount: "", notes: "", photoFiles: [] });
+      } else toast_("Error saving");
+    } else {
+      const row = {
+        user_id: userId, car_id: incidentForm.carId, date: incidentForm.date,
+        description: incidentForm.description, repair_shop: incidentForm.repairShop,
+        status: incidentForm.status,
+        quotation_amount: incidentForm.quotationAmount ? Number(incidentForm.quotationAmount) : null,
+        repair_amount: incidentForm.repairAmount ? Number(incidentForm.repairAmount) : null,
+        photo_urls: photoUrls.length ? photoUrls : null,
+        notes: incidentForm.notes,
+      };
+      const { data, error } = await supabase.from("incidents").insert(row).select().single();
+      if (!error) {
+        setIncidents(i => [data, ...i]);
+        toast_("✓ Incident logged");
+        setShowIncidentForm(false);
+        setIncidentForm({ carId: cars[0]?.id || "", date: today(), description: "", repairShop: "", status: "Quoted", quotationAmount: "", repairAmount: "", notes: "", photoFiles: [] });
+      } else toast_("Error saving");
+    }
     setSyncing(false);
   }
 
@@ -1975,6 +2026,7 @@ export default function App({ session }) {
           incidentForm={incidentForm} setIncidentForm={setIncidentForm}
           showIncidentForm={showIncidentForm} setShowIncidentForm={setShowIncidentForm}
           onSaveIncident={handleSaveIncident} updateIncidentStatus={updateIncidentStatus}
+          onStartEditIncident={startEditIncident} editingIncidentId={editingIncidentId}
           carName={carName} carColor={carColor}
         />
       )}
