@@ -893,7 +893,14 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={S.title}>Fleet Dashboard</div>
-          <div style={S.sub}>{cars.length} cars · {monthLabel(selectedMonth)}</div>
+          <div style={S.sub}>{cars.length} cars · {monthLabel(selectedMonth)}
+            {selectedMonth === "all" && weeks.length > 0 && (() => {
+              const dates = weeks.map(w => w.week_start).sort();
+              const first = new Date(dates[0]).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+              const last = new Date(today()).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+              return <span style={{ color: C.muted, fontSize: 11, marginLeft: 6 }}>({first} – {last})</span>;
+            })()}
+          </div>
         </div>
         <select
           style={{ ...S.input, width: "auto", minWidth: 160 }}
