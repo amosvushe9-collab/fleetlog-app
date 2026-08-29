@@ -2111,15 +2111,31 @@ export default function App({ session }) {
   }
 
   async function completeOnboarding(selectedSector, displayName) {
-    const updates = { id: userId, sector: selectedSector, display_name: displayName || null, onboarded: true };
-    // Try upsert first (works if row exists), then insert if not
-    const { data, error } = await supabase.from("profiles").upsert(updates, { onConflict: "id" }).select().single();
-    if (!error && data) {
-      setProfile(data);
-    } else {
-      // Fallback: just update state so user can proceed even if DB write fails
-      setProfile({ id: userId, sector: selectedSector, onboarded: true, tier: "free" });
+    // First try update (row already exists)
+    const { data: updated, error: updateErr } = await supabase
+      .from("profiles")
+      .update({ sector: selectedSector, display_name: displayName || null, onboarded: true })
+      .eq("id", userId)
+      .select().single();
+
+    if (!updateErr && updated) {
+      setProfile(updated);
+      return;
     }
+
+    // Row doesn't exist yet — insert it
+    const { data: inserted, error: insertErr } = await supabase
+      .from("profiles")
+      .insert({ id: userId, sector: selectedSector, display_name: displayName || null, onboarded: true })
+      .select().single();
+
+    if (!insertErr && inserted) {
+      setProfile(inserted);
+      return;
+    }
+
+    // DB failed for some reason — set locally so user isn't stuck
+    setProfile({ id: userId, sector: selectedSector, onboarded: true, tier: "free" });
   }
 
   if (loading) {
@@ -2131,8 +2147,8 @@ export default function App({ session }) {
     );
   }
 
-  // Show onboarding if profile doesn't exist or sector not set yet
-  if (!profile || !profile.onboarded) {
+  // Show onboarding only if no profile at all, or onboarded is explicitly false AND no sector set
+  if (!profile || (!profile.onboarded && !profile.sector)) {
     return <Onboarding onComplete={completeOnboarding} />;
   }
 
