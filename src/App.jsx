@@ -66,6 +66,70 @@ function monthLabel(key) {
   return new Date(parts[0], parts[1] - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
+// ── Sector Configuration ──────────────────────────────────────────────────────
+const SECTORS = {
+  ridehailing: {
+    label: "Ride-Hailing",
+    icon: "🚗",
+    desc: "InDrive, Uber, Bolt — driver pays you weekly",
+    vehicleLabel: "Car",
+    vehiclesLabel: "Cars",
+    incomeLabel: "Weekly Income",
+    incomeTab: "Weekly",
+    driverLabel: "Driver",
+    extraDocTypes: [],
+    extraAlerts: [],
+    incomeFields: ["weekStart", "weekEnd", "km", "amount", "paid"],
+    color: "#22d3ee",
+  },
+  kombi: {
+    label: "Kombi / Minibus",
+    icon: "🚌",
+    desc: "Minibus taxis — daily takings from driver",
+    vehicleLabel: "Kombi",
+    vehiclesLabel: "Kombis",
+    incomeLabel: "Daily Takings",
+    incomeTab: "Daily",
+    driverLabel: "Driver",
+    extraDocTypes: ["Route Permit", "Operator Licence", "PSV Licence"],
+    extraAlerts: [{ label: "Brake Pads", intervalKm: 30000, lastDoneKm: 0 }],
+    incomeFields: ["date", "route", "amount", "paid"],
+    color: "#f59e0b",
+  },
+  haulage: {
+    label: "Haulage / Trucks",
+    icon: "🚛",
+    desc: "Trucks — income per trip or load",
+    vehicleLabel: "Truck",
+    vehiclesLabel: "Trucks",
+    incomeLabel: "Trip Income",
+    incomeTab: "Trips",
+    driverLabel: "Driver",
+    extraDocTypes: ["Certificate of Fitness (COF)", "Goods Vehicle Licence", "Cross-Border Permit"],
+    extraAlerts: [{ label: "Wheel Alignment", intervalKm: 20000, lastDoneKm: 0 }, { label: "Trailer Service", intervalKm: 15000, lastDoneKm: 0 }],
+    incomeFields: ["date", "origin", "destination", "loadType", "amount", "paid"],
+    color: "#ef4444",
+  },
+  schoolbus: {
+    label: "School Bus",
+    icon: "🏫",
+    desc: "School transport — monthly contracts",
+    vehicleLabel: "Bus",
+    vehiclesLabel: "Buses",
+    incomeLabel: "Contract Income",
+    incomeTab: "Contracts",
+    driverLabel: "Driver",
+    extraDocTypes: ["PSV Licence", "School Transport Permit", "Operator Licence"],
+    extraAlerts: [],
+    incomeFields: ["month", "school", "learners", "amount", "paid"],
+    color: "#22c55e",
+  },
+};
+
+function getSectorCfg(sector) {
+  return SECTORS[sector] || SECTORS.ridehailing;
+}
+
 const DOC_TYPES = ["Insurance (Full Cover)", "Insurance (Third Party)", "ZINARA / Vehicle Licence", "Roadworthy Certificate", "Other"];
 const COST_CATS = ["Service & Insurance", "Tyres", "Repairs", "Accessories", "Safety", "Electronics", "Other"];
 const INCIDENT_STATUSES = ["Quoted", "Approved", "In Repair", "Done"];
@@ -655,10 +719,11 @@ function IncidentForm({ form, setForm, cars, syncing, uploading, onSave, onCance
 }
 
 
-function NewCarForm({ newCar, setNewCar, syncing, onSave, onCancel }) {
+function NewCarForm({ newCar, setNewCar, syncing, onSave, onCancel, vehicleLabel }) {
+  const vLabel = vehicleLabel || "Car";
   return (
     <div style={{ ...S.card, maxWidth: 420, marginBottom: 16, borderColor: C.cyan + "44" }}>
-      <div style={{ fontWeight: 700, color: C.cyan, marginBottom: 14 }}>New Car</div>
+      <div style={{ fontWeight: 700, color: C.cyan, marginBottom: 14 }}>New {vLabel}</div>
       <div style={{ marginBottom: 12 }}><label style={S.label}>Name</label>
         <input style={S.input} placeholder="e.g. Car 3 (Silver)" value={newCar.name} onChange={e => setNewCar(n => ({ ...n, name: e.target.value }))} />
       </div>
@@ -679,10 +744,10 @@ function NewCarForm({ newCar, setNewCar, syncing, onSave, onCancel }) {
         </div>
       </div>
       <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
-        Optional — set this to the car's actual odometer reading today, and FleetLog will add every km you log from here onward to show the true total.
+        Optional — set this to the car's actual odometer reading today, and FleetMate will add every km you log from here onward to show the true total.
       </div>
       <div style={S.row}>
-        <button style={S.btn()} onClick={onSave} disabled={syncing}>{syncing ? "Saving..." : "Add Car"}</button>
+        <button style={S.btn()} onClick={onSave} disabled={syncing}>{syncing ? "Saving..." : "Add " + vLabel}</button>
         <button style={S.ghost} onClick={onCancel}>Cancel</button>
       </div>
     </div>
@@ -702,7 +767,7 @@ function OdometerEditForm({ car, value, setValue, syncing, onSave, onCancel }) {
         </div>
       </div>
       <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
-        Set this whenever you check the car's real odometer, to keep FleetLog's total accurate. Weeks logged before this date won't be double-counted.
+        Set this whenever you check the car's real odometer, to keep FleetMate's total accurate. Weeks logged before this date won't be double-counted.
       </div>
       <div style={S.row}>
         <button style={S.btn()} onClick={onSave} disabled={syncing}>{syncing ? "Saving..." : "Save"}</button>
@@ -848,7 +913,77 @@ function ServiceRecordForm({ car, alerts, form, setForm, syncing, uploading, onS
 // PAGE COMPONENTS
 // ════════════════════════════════════════════════════════════════════════════
 
-function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView }) {
+function Onboarding({ onComplete }) {
+  const [selected, setSelected] = useState(null);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleStart() {
+    if (!selected) return;
+    setSaving(true);
+    await onComplete(selected, name.trim());
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ maxWidth: 480, width: "100%" }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>⚡</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: C.cyan, marginBottom: 8 }}>Welcome to FleetMate</div>
+          <div style={{ color: C.muted, fontSize: 14 }}>Let's set up your fleet. What type of vehicles do you operate?</div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+          {Object.entries(SECTORS).map(([key, cfg]) => (
+            <button
+              key={key}
+              onClick={() => setSelected(key)}
+              style={{
+                background: selected === key ? cfg.color + "22" : C.surface,
+                border: "2px solid " + (selected === key ? cfg.color : C.border),
+                borderRadius: 12, padding: "14px 18px", cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 14, textAlign: "left",
+                transition: "all 0.15s",
+              }}
+            >
+              <span style={{ fontSize: 28 }}>{cfg.icon}</span>
+              <div>
+                <div style={{ fontWeight: 700, color: selected === key ? cfg.color : C.text, fontSize: 15 }}>{cfg.label}</div>
+                <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{cfg.desc}</div>
+              </div>
+              {selected === key && <span style={{ marginLeft: "auto", color: cfg.color, fontSize: 18 }}>✓</span>}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={S.label}>Your name or business name (optional)</label>
+          <input
+            style={S.input}
+            placeholder="e.g. Vushe Transport"
+            value={name}
+            onChange={e => setName(e.target.value)}
+          />
+        </div>
+
+        <button
+          onClick={handleStart}
+          disabled={!selected || saving}
+          style={{ ...S.btn(selected ? SECTORS[selected].color : C.border), width: "100%", padding: "14px", fontSize: 15, fontWeight: 800, opacity: selected ? 1 : 0.5 }}
+        >
+          {saving ? "Setting up..." : selected ? "Get Started with " + SECTORS[selected].label + " " + SECTORS[selected].icon : "Select a sector above"}
+        </button>
+
+        <div style={{ color: C.muted, fontSize: 11, textAlign: "center", marginTop: 16 }}>
+          You can change this later in Settings · Free to start, upgrade anytime
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView, sector }) {
   const [selectedMonth, setSelectedMonth] = useState("all");
 
   // Build the list of months that actually have data, newest first, plus "All Time"
@@ -893,7 +1028,7 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={S.title}>Fleet Dashboard</div>
-          <div style={S.sub}>{cars.length} cars · {monthLabel(selectedMonth)}
+          <div style={S.sub}>{cars.length} {getSectorCfg(sector).vehiclesLabel} · {monthLabel(selectedMonth)}
             {selectedMonth === "all" && weeks.length > 0 && (() => {
               const dates = weeks.map(w => w.week_start).sort();
               const first = new Date(dates[0]).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -1421,17 +1556,17 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
 
 function Cars({
   cars, weeks, carStats, showAddCar, setShowAddCar, newCar, setNewCar, syncing,
-  onAddCar, editingOdoCarId, setEditingOdoCarId, odoForm, setOdoForm, onSaveOdometer,
+  onAddCar, editingOdoCarId, setEditingOdoCarId, odoForm, setOdoForm, onSaveOdometer, cfg,
 }) {
   return (
     <div style={S.page}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-        <div><div style={S.title}>My Cars</div><div style={S.sub}>Manage your fleet</div></div>
-        <button style={S.btn()} onClick={() => setShowAddCar(v => !v)}>+ Add Car</button>
+        <div><div style={S.title}>My {cfg.vehiclesLabel}</div><div style={S.sub}>Manage your fleet</div></div>
+        <button style={S.btn()} onClick={() => setShowAddCar(v => !v)}>+ Add {cfg.vehicleLabel}</button>
       </div>
 
       {showAddCar && (
-        <NewCarForm newCar={newCar} setNewCar={setNewCar} syncing={syncing} onSave={onAddCar} onCancel={() => setShowAddCar(false)} />
+        <NewCarForm newCar={newCar} setNewCar={setNewCar} syncing={syncing} onSave={onAddCar} onCancel={() => setShowAddCar(false)} vehicleLabel={cfg.vehicleLabel} />
       )}
 
       {carStats.map(({ car, totalKm, totalReceived, totalCosts, net, perKm, avgWeeklyKm }) => {
@@ -1488,6 +1623,7 @@ export default function App({ session }) {
   const [docs, setDocs]   = useState([]);
   const [serviceRecords, setServiceRecords] = useState([]);
   const [incidents, setIncidents] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -1528,13 +1664,14 @@ export default function App({ session }) {
   useEffect(() => {
     async function fetchAll() {
       setLoading(true);
-      const [carsRes, weeksRes, costsRes, docsRes, serviceRes, incidentRes] = await Promise.all([
+      const [carsRes, weeksRes, costsRes, docsRes, serviceRes, incidentRes, profileRes] = await Promise.all([
         supabase.from("cars").select("*").eq("user_id", userId).order("created_at"),
         supabase.from("weeks").select("*").eq("user_id", userId).order("week_start", { ascending: false }),
         supabase.from("costs").select("*").eq("user_id", userId).order("date", { ascending: false }),
         supabase.from("docs").select("*").eq("user_id", userId).order("expiry"),
         supabase.from("service_records").select("*").eq("user_id", userId).order("date", { ascending: false }),
         supabase.from("incidents").select("*").eq("user_id", userId).order("date", { ascending: false }),
+        supabase.from("profiles").select("*").eq("id", userId).single(),
       ]);
       if (carsRes.data)  setCars(carsRes.data);
       if (weeksRes.data) setWeeks(weeksRes.data);
@@ -1542,6 +1679,7 @@ export default function App({ session }) {
       if (docsRes.data)  setDocs(docsRes.data);
       if (serviceRes.data) setServiceRecords(serviceRes.data);
       if (incidentRes.data) setIncidents(incidentRes.data);
+      if (profileRes.data) setProfile(profileRes.data);
       setLoading(false);
     }
     fetchAll();
@@ -1978,13 +2116,27 @@ export default function App({ session }) {
     );
   }
 
+  async function completeOnboarding(sector, displayName) {
+    const updates = { id: userId, sector, display_name: displayName || null, onboarded: true };
+    const { data } = await supabase.from("profiles").upsert(updates).select().single();
+    if (data) setProfile(data);
+  }
+
+  // Show onboarding if profile doesn't exist or sector not set yet
+  if (!profile || !profile.onboarded) {
+    return <Onboarding onComplete={completeOnboarding} />;
+  }
+
+  const sector = profile.sector || "ridehailing";
+  const cfg = getSectorCfg(sector);
+
   const nav = [
     { id: "dashboard", label: "Dashboard" },
-    { id: "weekly", label: "Weekly" },
+    { id: "weekly", label: cfg.incomeTab },
     { id: "costs", label: "Costs" },
     { id: "maintenance", label: "Service" },
     { id: "docs", label: "Docs" },
-    { id: "cars", label: "Cars" },
+    { id: "cars", label: cfg.vehiclesLabel },
   ];
 
   return (
@@ -1993,7 +2145,8 @@ export default function App({ session }) {
       {syncing && <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 2, background: C.cyan, zIndex: 1000 }} />}
 
       <header style={S.header}>
-        <div style={S.logo}>⚡ FleetLog</div>
+        <div style={S.logo}>⚡ FleetMate</div>
+        <span style={{ fontSize: 10, color: C.muted, background: C.faint, borderRadius: 6, padding: "2px 7px", marginLeft: 2 }}>{cfg.icon} {cfg.label}</span>
         {(allAlerts.length + docAlerts.length) > 0 && (
           <span onClick={() => setView(allAlerts.length ? "maintenance" : "docs")} style={{ background: C.amber + "22", color: C.amber, borderRadius: 99, padding: "2px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
             ⚠ {allAlerts.length + docAlerts.length}
@@ -2008,7 +2161,7 @@ export default function App({ session }) {
       </header>
 
       {view === "dashboard" && (
-        <Dashboard cars={cars} weeks={weeks} costs={costs} allAlerts={allAlerts} docAlerts={docAlerts} paymentAlerts={paymentAlerts} missingWeekAlerts={missingWeekAlerts} carName={carName} setView={setView} />
+        <Dashboard cars={cars} weeks={weeks} costs={costs} allAlerts={allAlerts} docAlerts={docAlerts} paymentAlerts={paymentAlerts} missingWeekAlerts={missingWeekAlerts} carName={carName} setView={setView} sector={sector} />
       )}
 
       {view === "weekly" && (
@@ -2066,6 +2219,7 @@ export default function App({ session }) {
           onAddCar={handleAddCar}
           editingOdoCarId={editingOdoCarId} setEditingOdoCarId={setEditingOdoCarId}
           odoForm={odoForm} setOdoForm={setOdoForm} onSaveOdometer={handleSaveOdometer}
+          cfg={cfg}
         />
       )}
     </div>
