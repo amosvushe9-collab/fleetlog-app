@@ -2107,6 +2107,18 @@ export default function App({ session }) {
     await supabase.auth.signOut();
   }
 
+  async function completeOnboarding(selectedSector, displayName) {
+    const updates = { id: userId, sector: selectedSector, display_name: displayName || null, onboarded: true };
+    // Try upsert first (works if row exists), then insert if not
+    const { data, error } = await supabase.from("profiles").upsert(updates, { onConflict: "id" }).select().single();
+    if (!error && data) {
+      setProfile(data);
+    } else {
+      // Fallback: just update state so user can proceed even if DB write fails
+      setProfile({ id: userId, sector: selectedSector, onboarded: true, tier: "free" });
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
@@ -2114,12 +2126,6 @@ export default function App({ session }) {
         <div style={{ color: C.muted, fontSize: 13 }}>Loading your fleet...</div>
       </div>
     );
-  }
-
-  async function completeOnboarding(sector, displayName) {
-    const updates = { id: userId, sector, display_name: displayName || null, onboarded: true };
-    const { data } = await supabase.from("profiles").upsert(updates).select().single();
-    if (data) setProfile(data);
   }
 
   // Show onboarding if profile doesn't exist or sector not set yet
