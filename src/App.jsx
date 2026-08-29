@@ -1772,7 +1772,10 @@ export default function App({ session }) {
     const totalKm = wForm.entryMode === "total"
       ? Number(wForm.totalKm) || 0
       : wForm.days.reduce((s, d) => s + (Number(d) || 0), 0);
-    if (!wForm.carId || !wForm.weekStart || !wForm.weekEnd || totalKm === 0 || !wForm.amount) return;
+    if (!wForm.carId) { toast_("Please select a car"); return; }
+    if (!wForm.weekStart || !wForm.weekEnd) { toast_("Please set a date range"); return; }
+    if (totalKm === 0) { toast_("Please enter mileage for this period"); return; }
+    if (!wForm.amount) { toast_("Please enter payment amount"); return; }
     setSyncing(true);
 
     const dailyKmToStore = wForm.entryMode === "total" ? null : wForm.days;
