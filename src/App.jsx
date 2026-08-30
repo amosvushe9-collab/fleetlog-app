@@ -153,7 +153,7 @@ const C = {
 
 function mkS() {
   return {
-    app: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Inter','SF Pro Display','Segoe UI',sans-serif", fontSize: 14, paddingBottom: 64 },
+    app: { minHeight: "100vh", background: "radial-gradient(ellipse at 15% 40%, #0c1a2e 0%, " + C.bg + " 50%), radial-gradient(ellipse at 85% 60%, #0a1525 0%, " + C.bg + " 50%)", color: C.text, fontFamily: "'Inter','SF Pro Display','Segoe UI',sans-serif", fontSize: 14, paddingBottom: 64 },
     header: { background: C.surface + "ee", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderBottom: "1px solid " + C.border, padding: "0 16px", display: "flex", alignItems: "center", gap: 10, height: 54, position: "sticky", top: 0, zIndex: 100 },
     logo: { color: C.cyan, fontWeight: 900, fontSize: 17, letterSpacing: "-0.05em" },
     page: { padding: "16px 16px 80px", maxWidth: 960, margin: "0 auto" },
@@ -991,7 +991,7 @@ function Onboarding({ onComplete }) {
   );
 }
 
-function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView, sector }) {
+function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView, sector }) {
   const [selectedMonth, setSelectedMonth] = useState("all");
 
   // Build the list of months that actually have data, newest first, plus "All Time"
@@ -1081,8 +1081,32 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
       out.push({ level: "warn", text: totalUnpaid + " week" + (totalUnpaid > 1 ? "s" : "") + " still unpaid — " + fmt(totalUnpaidAmt) + " outstanding. Follow up with your driver" + (totalUnpaid > 1 ? "s" : "") + "." });
     }
 
-    return out.slice(0, 4);
-  }, [monthCarStats, totRec, totNet, selectedMonth]);
+    // 6. Accident/repair pattern — if one car has significantly more incidents or repair costs
+    if (incidents && incidents.length > 0) {
+      const incidentsBycar = {};
+      cars.forEach(car => { incidentsBycar[car.id] = { car, count: 0, totalRepair: 0 }; });
+      incidents.forEach(inc => {
+        if (incidentsBycar[inc.car_id]) {
+          incidentsBycar[inc.car_id].count++;
+          incidentsBycar[inc.car_id].totalRepair += Number(inc.repair_amount || inc.quotation_amount || 0);
+        }
+      });
+      const incList = Object.values(incidentsBycar).filter(x => x.count > 0);
+      if (incList.length > 0) {
+        const mostIncidents = incList.sort((a, b) => b.count - a.count)[0];
+        if (mostIncidents.count >= 2) {
+          out.push({ level: "warn", text: mostIncidents.car.name + " has been involved in " + mostIncidents.count + " incident" + (mostIncidents.count > 1 ? "s" : "") + (mostIncidents.totalRepair > 0 ? " with " + fmt(mostIncidents.totalRepair) + " in repair costs" : "") + ". Consider reviewing the driver's care record — recurring incidents may signal a pattern worth addressing." });
+        } else if (incList.length >= 2) {
+          const sorted = incList.sort((a, b) => b.totalRepair - a.totalRepair);
+          if (sorted[0].totalRepair > 0 && sorted[0].totalRepair > sorted[1].totalRepair * 2) {
+            out.push({ level: "warn", text: sorted[0].car.name + " has accumulated " + fmt(sorted[0].totalRepair) + " in incident repairs vs " + fmt(sorted[1].totalRepair) + " for " + sorted[1].car.name + ". One vehicle is significantly more accident-prone — worth a conversation with that driver." });
+          }
+        }
+      }
+    }
+
+    return out.slice(0, 5);
+  }, [monthCarStats, totRec, totNet, selectedMonth, incidents]);
 
   // Monthly trend for net profit — last 6 months
   const monthlyTrend = useMemo(() => {
@@ -2416,7 +2440,7 @@ export default function App({ session }) {
       </nav>
 
       {view === "dashboard" && (
-        <Dashboard cars={cars} weeks={weeks} costs={costs} allAlerts={allAlerts} docAlerts={docAlerts} paymentAlerts={paymentAlerts} missingWeekAlerts={missingWeekAlerts} carName={carName} setView={setView} sector={sector} />
+        <Dashboard cars={cars} weeks={weeks} costs={costs} incidents={incidents} allAlerts={allAlerts} docAlerts={docAlerts} paymentAlerts={paymentAlerts} missingWeekAlerts={missingWeekAlerts} carName={carName} setView={setView} sector={sector} />
       )}
 
       {view === "weekly" && (
