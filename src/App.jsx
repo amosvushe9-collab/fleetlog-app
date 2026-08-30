@@ -1187,6 +1187,12 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
       </div>
 
       {/* Insights Panel — right after summary stats so it's seen immediately */}
+      {/* DEBUG — remove after fixing */}
+      <div style={{ background: "#111", border: "1px solid #333", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: "#aaa" }}>
+        <div>totRec: {totRec} | totNet: {totNet} | cars: {monthCarStats.length} | insights: {insights.length}</div>
+        {monthCarStats.map(s => <div key={s.car.id}>{s.car.name}: rec={s.totalReceived} cost={s.totalCosts} net={s.net} km={s.totalKm} perKm={s.perKm.toFixed(3)} weeks={s.weekCount}</div>)}
+      </div>
+
       {insights.length > 0 && (
         <div style={{ ...S.card, marginBottom: 16, borderColor: insights.some(i => i.level === "danger") ? C.red + "66" : insights.some(i => i.level === "warn") ? C.amber + "66" : C.green + "66" }}>
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
