@@ -466,7 +466,8 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
             </div>
           )}
           <label style={S.label}>Daily Mileage — tap each day as you read SinoTrack</label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 12 }}>
+          <div style={{ overflowX: "auto", marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(44px, 1fr))", gap: 6, minWidth: 320 }}>
             {DAYS.map((day, i) => {
               const isActive = activeDay === i;
               const hasVal = Number(wForm.days[i]) > 0;
@@ -485,6 +486,7 @@ function WeekForm({ wForm, setWForm, cars, editingWeekId, activeDay, setActiveDa
                 </div>
               );
             })}
+          </div>
           </div>
         </>
       ) : (
@@ -1029,6 +1031,65 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
   // which for an operating fleet usually means costs weren't entered, not that there were none.
   const looksIncomplete = selectedMonth !== "all" && totWeekCount > 0 && totCostCount === 0;
 
+  // Generate plain-language insights from the data
+  const insights = useMemo(() => {
+    const out = [];
+    if (monthCarStats.length === 0 || totRec === 0) return out;
+
+    // 1. Loss-making vehicle
+    const lossVehicles = monthCarStats.filter(s => s.totalReceived > 0 && s.net < 0);
+    lossVehicles.forEach(s => {
+      out.push({ level: "danger", text: s.car.name + " is running at a loss — earned " + fmt(s.totalReceived) + " but costs were " + fmt(s.totalCosts) + ". Net: " + fmt(s.net) + ". Check if recent repairs are a one-off or a pattern." });
+    });
+
+    // 2. $/km efficiency gap between cars
+    const ranked = [...monthCarStats].filter(s => s.perKm > 0).sort((a, b) => b.perKm - a.perKm);
+    if (ranked.length >= 2) {
+      const best = ranked[0], worst = ranked[ranked.length - 1];
+      const gap = ((best.perKm - worst.perKm) / best.perKm * 100).toFixed(0);
+      if (gap > 20) {
+        out.push({ level: "warn", text: best.car.name + " earns " + fmtRate(best.perKm) + " while " + worst.car.name + " earns " + fmtRate(worst.perKm) + " — a " + gap + "% efficiency gap. " + worst.car.name + " may have higher costs or lower mileage." });
+      }
+    }
+
+    // 3. High cost ratio
+    monthCarStats.forEach(s => {
+      if (s.totalReceived > 0) {
+        const costRatio = s.totalCosts / s.totalReceived;
+        if (costRatio > 0.5) {
+          out.push({ level: "warn", text: fmt(Math.round(costRatio * 100)) + "% of " + s.car.name + "'s earnings went to costs" + (selectedMonth === "all" ? " all time" : " this period") + ". Costs: " + fmt(s.totalCosts) + " vs earnings: " + fmt(s.totalReceived) + "." });
+        }
+      }
+    });
+
+    // 4. Positive — if all cars profitable
+    if (lossVehicles.length === 0 && monthCarStats.every(s => s.net > 0)) {
+      const bestEarner = [...monthCarStats].sort((a, b) => b.net - a.net)[0];
+      out.push({ level: "good", text: "All vehicles are profitable" + (selectedMonth === "all" ? "" : " this period") + ". Best performer: " + bestEarner.car.name + " with " + fmt(bestEarner.net) + " net profit." });
+    }
+
+    // 5. Unpaid weeks
+    const totalUnpaid = monthCarStats.reduce((s, c) => s + c.unpaidCount, 0);
+    const totalUnpaidAmt = monthCarStats.reduce((s, c) => s + c.unpaidAmt, 0);
+    if (totalUnpaid > 0) {
+      out.push({ level: "warn", text: totalUnpaid + " week" + (totalUnpaid > 1 ? "s" : "") + " still unpaid — " + fmt(totalUnpaidAmt) + " outstanding. Follow up with your driver" + (totalUnpaid > 1 ? "s" : "") + "." });
+    }
+
+    return out.slice(0, 4); // max 4 insights
+  }, [monthCarStats, totRec, selectedMonth]);
+
+  // Monthly trend for net profit — last 6 months
+  const monthlyTrend = useMemo(() => {
+    const allMonths = [...new Set([...weeks.map(w => monthKey(w.week_start)), ...costs.map(c => monthKey(c.date))])].filter(Boolean).sort().slice(-6);
+    return allMonths.map(mk => {
+      const mw = weeks.filter(w => monthKey(w.week_start) === mk);
+      const mc = costs.filter(c => monthKey(c.date) === mk);
+      const rec = mw.filter(w => w.paid).reduce((s, w) => s + Number(w.amount || 0), 0);
+      const cost = mc.reduce((s, c) => s + Number(c.amount || 0), 0);
+      return { month: mk, net: rec - cost, rec, cost };
+    });
+  }, [weeks, costs]);
+
   return (
     <div style={S.page}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 10 }}>
@@ -1124,7 +1185,7 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
           const odo = currentOdometer(car, weeks); // odometer is always true total-to-date, not month-scoped
           const maxPK = Math.max(...monthCarStats.map(s => s.perKm), 0.001);
           return (
-            <div key={car.id} style={{ ...S.card, flex: 1, minWidth: 240, borderTop: `3px solid ${car.color}` }}>
+            <div key={car.id} style={{ ...S.card, flex: 1, minWidth: 280, borderTop: "3px solid " + car.color }}>
               <div style={{ fontWeight: 700, color: car.color, fontSize: 15, marginBottom: 12 }}>{car.name}</div>
               <div style={{ ...S.row, marginBottom: 12 }}>
                 <Stat label="Received" value={fmt(totalReceived)} color={C.green} small />
@@ -1149,9 +1210,63 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
         })}
       </div>
 
+      </div>
+
+      {/* Insights Panel */}
+      {insights.length > 0 && (
+        <div style={{ ...S.card, marginBottom: 16, borderColor: insights.some(i => i.level === "danger") ? C.red + "66" : C.amber + "66" }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>🧠</span>
+            <span style={{ color: C.text }}>Fleet Insights</span>
+            <span style={{ fontSize: 10, color: C.muted, marginLeft: "auto" }}>{selectedMonth === "all" ? "All time" : monthLabel(selectedMonth)}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {insights.map((ins, i) => {
+              const col = ins.level === "danger" ? C.red : ins.level === "good" ? C.green : C.amber;
+              const icon = ins.level === "danger" ? "⚠" : ins.level === "good" ? "✓" : "ℹ";
+              return (
+                <div key={i} style={{ display: "flex", gap: 10, padding: "10px 12px", background: col + "10", borderRadius: 10, borderLeft: "3px solid " + col }}>
+                  <span style={{ color: col, fontSize: 14, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+                  <span style={{ color: C.text, fontSize: 13, lineHeight: 1.5 }}>{ins.text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Net Profit Trend */}
+      {monthlyTrend.length >= 2 && (
+        <div style={{ ...S.card, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14 }}>Monthly Net Profit — Last 6 Months</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 80 }}>
+            {monthlyTrend.map((m, i) => {
+              const maxAbs = Math.max(...monthlyTrend.map(x => Math.abs(x.net)), 1);
+              const barH = Math.round((Math.abs(m.net) / maxAbs) * 64);
+              const isPos = m.net >= 0;
+              return (
+                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                  <div style={{ fontSize: 9, color: isPos ? C.green : C.red, fontWeight: 700, fontFamily: "monospace" }}>{m.net >= 0 ? "+" : ""}{fmt(m.net).replace("$", "")}</div>
+                  <div style={{ display: "flex", alignItems: "flex-end", height: 64 }}>
+                    <div style={{ width: "100%", minWidth: 24, height: Math.max(barH, 3), background: isPos ? C.green : C.red, borderRadius: isPos ? "4px 4px 0 0" : "0 0 4px 4px", opacity: 0.85 }} />
+                  </div>
+                  <div style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>
+                    {new Date(m.month + "-01").toLocaleDateString("en-GB", { month: "short" })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 10, color: C.muted }}>
+            <span style={{ color: C.green }}>▌</span> Profitable month
+            <span style={{ color: C.red, marginLeft: 8 }}>▌</span> Loss month
+          </div>
+        </div>
+      )}
+
       <div style={S.card}>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>Weekly Mileage — Last 12 Weeks</div>
-        <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Always shows recent trend regardless of the month selected above</div>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>Mileage — Last 12 Weeks</div>
+        <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Always shows recent trend regardless of month selected above</div>
         <WeeklyBars weeks={weeks} cars={cars} />
       </div>
     </div>
