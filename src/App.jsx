@@ -1211,12 +1211,39 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
       </div>
 
       {/* Insights Panel — between summary stats and per-car breakdown */}
-      {insights.length > 0 && (
+      {insights.length > 0 && (function() {
+        function speakInsights() {
+          if (!window.speechSynthesis) return;
+          window.speechSynthesis.cancel();
+          const text = "Fleet Insights. " + insights.map(ins => ins.text).join(". ");
+          const utt = new window.SpeechSynthesisUtterance(text);
+          utt.rate = 0.95;
+          utt.pitch = 1;
+          window.speechSynthesis.speak(utt);
+        }
+        function stopSpeaking() {
+          if (window.speechSynthesis) window.speechSynthesis.cancel();
+        }
+        return (
         <div style={{ ...S.card, marginBottom: 16, borderColor: insights.some(i => i.level === "danger") ? C.red + "66" : insights.some(i => i.level === "warn") ? C.amber + "66" : C.green + "66" }}>
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 16 }}>🧠</span>
             <span style={{ color: C.text }}>Fleet Insights</span>
             <span style={{ fontSize: 10, color: C.muted, marginLeft: "auto" }}>{selectedMonth === "all" ? "All time" : monthLabel(selectedMonth)}</span>
+            <button
+              onClick={speakInsights}
+              title="Read insights out loud"
+              style={{ background: C.faint, border: "1px solid " + C.border, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 14, color: C.cyan, display: "flex", alignItems: "center", gap: 4 }}
+            >
+              🔊 <span style={{ fontSize: 11, fontWeight: 600 }}>Read</span>
+            </button>
+            <button
+              onClick={stopSpeaking}
+              title="Stop reading"
+              style={{ background: C.faint, border: "1px solid " + C.border, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 14, color: C.muted }}
+            >
+              ■
+            </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {insights.map((ins, i) => {
@@ -1231,7 +1258,8 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       <div style={{ ...S.row, marginBottom: 16 }}>
         {monthCarStats.map(({ car, totalKm, totalReceived, totalCosts, net, perKm, avgWeeklyKm, unpaidCount, unpaidAmt }) => {
