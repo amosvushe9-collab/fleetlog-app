@@ -144,39 +144,45 @@ function DEFAULT_ALERTS() {
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 const C = {
-  bg: "#080c14", surface: "#0f1623", border: "#1a2236",
-  text: "#e2e8f0", muted: "#64748b", faint: "#1e293b",
-  green: "#22c55e", cyan: "#22d3ee", amber: "#f59e0b",
-  red: "#ef4444", purple: "#a855f7",
+  bg: "#060910", surface: "#0c1220", card: "#111827",
+  border: "#1e2d45", faint: "#162032",
+  text: "#f0f4f8", muted: "#5a7a9a", dim: "#2a3f5a",
+  green: "#16db6e", cyan: "#00c8e8", amber: "#ffb020",
+  red: "#ff4d4d", purple: "#a855f7",
 };
 
 function mkS() {
   return {
-    app: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Inter','Segoe UI',sans-serif", fontSize: 14 },
-    header: { background: C.surface, borderBottom: "1px solid " + C.border, padding: "0 16px", display: "flex", alignItems: "center", gap: 10, height: 52, position: "sticky", top: 0, zIndex: 100 },
-    logo: { color: C.cyan, fontWeight: 800, fontSize: 17, letterSpacing: "-0.04em" },
-    page: { padding: "16px", maxWidth: 960, margin: "0 auto" },
-    card: { background: C.surface, border: "1px solid " + C.border, borderRadius: 12, padding: 16 },
+    app: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Inter','SF Pro Display','Segoe UI',sans-serif", fontSize: 14, paddingBottom: 64 },
+    header: { background: C.surface + "ee", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderBottom: "1px solid " + C.border, padding: "0 16px", display: "flex", alignItems: "center", gap: 10, height: 54, position: "sticky", top: 0, zIndex: 100 },
+    logo: { color: C.cyan, fontWeight: 900, fontSize: 17, letterSpacing: "-0.05em" },
+    page: { padding: "16px 16px 80px", maxWidth: 960, margin: "0 auto" },
+    card: { background: C.card, border: "1px solid " + C.border, borderRadius: 14, padding: 16 },
     row: { display: "flex", gap: 10, flexWrap: "wrap" },
-    label: { color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5, display: "block" },
-    input: { background: C.faint, border: "1px solid " + C.border, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 14, width: "100%", boxSizing: "border-box", outline: "none" },
-    btn: (bg) => { const b = bg || C.cyan; return { background: b, color: b === C.cyan || b === C.green ? "#000" : "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
-    ghost: { background: "transparent", color: C.muted, border: "1px solid " + C.border, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" },
-    th: { color: C.muted, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", padding: "8px 10px", textAlign: "left", borderBottom: "1px solid " + C.border, whiteSpace: "nowrap" },
-    td: { padding: "9px 10px", borderBottom: "1px solid " + C.faint, verticalAlign: "middle" },
-    title: { fontSize: 18, fontWeight: 700, color: "#f8fafc", marginBottom: 4 },
+    label: { color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6, display: "block" },
+    input: { background: C.faint, border: "1px solid " + C.border, borderRadius: 10, color: C.text, padding: "10px 13px", fontSize: 14, width: "100%", boxSizing: "border-box", outline: "none" },
+    btn: function(bg) { var b = bg || C.cyan; var isLight = b === C.cyan || b === C.green; return { background: b, color: isLight ? "#030810" : "#fff", border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", letterSpacing: "0.01em" }; },
+    ghost: { background: "transparent", color: C.muted, border: "1px solid " + C.border, borderRadius: 10, padding: "9px 16px", fontSize: 13, cursor: "pointer" },
+    th: { color: C.muted, fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", padding: "10px 12px", textAlign: "left", borderBottom: "1px solid " + C.border, whiteSpace: "nowrap", background: C.faint },
+    td: { padding: "11px 12px", borderBottom: "1px solid " + C.border + "66", verticalAlign: "middle" },
+    title: { fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: "-0.02em" },
     sub: { color: C.muted, fontSize: 13, marginBottom: 20 },
   };
 }
 const S = mkS();
 
+function CardAccent({ color }) {
+  return React.createElement("div", { style: { height: 3, background: color || C.cyan, borderRadius: "12px 12px 0 0", margin: "-16px -16px 16px" } });
+}
+
 function Stat({ label, value, sub, color, small }) {
-  const statColor = color || C.cyan;
+  var statColor = color || C.cyan;
   return (
-    <div style={{ background: C.faint, borderRadius: 10, padding: small ? "10px 14px" : "14px 18px", flex: 1, minWidth: 100 }}>
-      <div style={{ color: C.muted, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{label}</div>
-      <div style={{ color: statColor, fontWeight: 700, fontSize: small ? 15 : 20, fontFamily: "monospace" }}>{value}</div>
-      {sub && <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{sub}</div>}
+    <div style={{ background: C.faint, borderRadius: 12, padding: small ? "10px 14px" : "16px 18px", flex: 1, minWidth: 100, border: "1px solid " + C.border, position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 0, right: 0, width: 60, height: 60, background: statColor + "12", borderRadius: "0 12px 0 60px", pointerEvents: "none" }} />
+      <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>{label}</div>
+      <div style={{ color: statColor, fontWeight: 800, fontSize: small ? 16 : 22, fontFamily: "'Roboto Mono','SF Mono','Fira Mono',monospace", letterSpacing: "-0.02em", lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
@@ -1152,27 +1158,96 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
   );
 }
 
+function DailyForm({ form, setForm, cars, cfg, syncing, editingId, onSave, onCancel }) {
+  return (
+    <div style={{ ...S.card, maxWidth: 500, marginBottom: 20, borderColor: C.amber + "55" }}>
+      <div style={{ fontWeight: 700, color: C.amber, fontSize: 15, marginBottom: 14 }}>{editingId ? "Edit Daily Record" : "Log Daily Takings"}</div>
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>{cfg.vehicleLabel}</label>
+          <select style={S.input} value={form.carId} onChange={e => setForm(f => ({ ...f, carId: e.target.value }))}>
+            {cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Date</label>
+          <input type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+        </div>
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label style={S.label}>Route</label>
+        <input style={S.input} placeholder="e.g. Harare CBD – Chitungwiza" value={form.route || ""} onChange={e => setForm(f => ({ ...f, route: e.target.value }))} />
+      </div>
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Daily Takings ($)</label>
+          <input type="number" inputMode="numeric" style={{ ...S.input, fontSize: 18, fontWeight: 800, color: C.green }} placeholder="0.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Trips / Runs</label>
+          <input type="number" inputMode="numeric" style={S.input} placeholder="e.g. 8" value={form.trips || ""} onChange={e => setForm(f => ({ ...f, trips: e.target.value }))} />
+        </div>
+      </div>
+      <div style={{ ...S.row, marginBottom: 14 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Status</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button style={{ ...S.btn(form.paid ? C.green : C.faint), flex: 1, color: form.paid ? "#000" : C.muted }} onClick={() => setForm(f => ({ ...f, paid: true }))}>✓ Paid</button>
+            <button style={{ ...S.btn(!form.paid ? C.amber : C.faint), flex: 1, color: !form.paid ? "#000" : C.muted }} onClick={() => setForm(f => ({ ...f, paid: false }))}>Pending</button>
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Notes (optional)</label>
+          <input style={S.input} placeholder="breakdown, short day..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+        </div>
+      </div>
+      <div style={S.row}>
+        <button style={{ ...S.btn(C.amber), flex: 1, color: "#000" }} onClick={onSave} disabled={syncing}>{syncing ? "Saving..." : editingId ? "Update" : "Save"}</button>
+        <button style={S.ghost} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 function Weekly({
   weeks, cars, filterCar, setFilterCar, carColor, carName, togglePaid, del, setWeeks,
   showW, setShowW, wForm, setWForm, editingWeekId, setEditingWeekId,
   activeDay, setActiveDay, syncing, blankDaily,
   onSaveWeek, onCancelWeekForm, onStartEditWeek,
+  cfg, sector,
+  dailyForm, setDailyForm, editingDailyId, onSaveDaily, onCancelDaily,
 }) {
   const filtered = weeks.filter(w => filterCar === "all" || w.car_id === filterCar);
+  const isKombi = sector === "kombi";
+  const accentColor = isKombi ? C.amber : C.cyan;
+
   return (
     <div style={S.page}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <div><div style={S.title}>Weekly Log</div><div style={S.sub}>Mileage + payment per week</div></div>
+        <div>
+          <div style={S.title}>{cfg ? cfg.incomeLabel : "Weekly Log"}</div>
+          <div style={S.sub}>{isKombi ? "Daily takings per vehicle" : "Mileage + payment per week"}</div>
+        </div>
         <div style={S.row}>
           <select style={{ ...S.input, width: "auto" }} value={filterCar} onChange={e => setFilterCar(e.target.value)}>
-            <option value="all">All Cars</option>
+            <option value="all">All {cfg ? cfg.vehiclesLabel : "Cars"}</option>
             {cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <button style={S.btn()} onClick={() => { setEditingWeekId(null); setWForm(blankDaily()); setShowW(v => !v); }}>+ Add Week</button>
+          <button style={S.btn(accentColor)} onClick={() => {
+            if (isKombi && setDailyForm) {
+              setDailyForm({ carId: cars[0]?.id || "", date: today(), route: "", amount: "", trips: "", paid: true, notes: "" });
+            } else {
+              setEditingWeekId(null); setWForm(blankDaily());
+            }
+            setShowW(v => !v);
+          }}>+ Add {isKombi ? "Day" : "Week"}</button>
         </div>
       </div>
 
-      {showW && (
+      {showW && isKombi && dailyForm && (
+        <DailyForm form={dailyForm} setForm={setDailyForm} cars={cars} cfg={cfg || { vehicleLabel: "Car" }} syncing={syncing} editingId={editingDailyId} onSave={onSaveDaily} onCancel={onCancelDaily} />
+      )}
+      {showW && !isKombi && (
         <WeekForm
           wForm={wForm} setWForm={setWForm} cars={cars}
           editingWeekId={editingWeekId} activeDay={activeDay} setActiveDay={setActiveDay}
@@ -1655,6 +1730,9 @@ export default function App({ session }) {
   const [incidentForm, setIncidentForm] = useState({ carId: "", date: today(), description: "", repairShop: "", status: "Quoted", quotationAmount: "", repairAmount: "", notes: "", photoFiles: [] });
   const [showIncidentForm, setShowIncidentForm] = useState(false);
   const [editingIncidentId, setEditingIncidentId] = useState(null);
+  // Kombi daily takings form
+  const [dailyForm, setDailyForm] = useState({ carId: "", date: today(), route: "", amount: "", trips: "", paid: true, notes: "" });
+  const [editingDailyId, setEditingDailyId] = useState(null);
 
   function toast_(m) { setToast(m); setTimeout(() => setToast(""), 2500); }
   const carColor = (id) => cars.find(c => c.id === id)?.color || C.muted;
@@ -1820,6 +1898,27 @@ export default function App({ session }) {
     setEditingWeekId(null);
     setWForm(blankDaily());
     setActiveDay(null);
+  }
+
+  async function handleSaveDaily() {
+    if (!dailyForm.carId || !dailyForm.date || !dailyForm.amount) {
+      toast_("Please select a vehicle, date, and enter takings");
+      return;
+    }
+    setSyncing(true);
+    // Store kombi daily takings as weeks records with week_start = week_end = date
+    if (editingDailyId) {
+      const updates = { car_id: dailyForm.carId, week_start: dailyForm.date, week_end: dailyForm.date, km: 0, daily_km: null, amount: Number(dailyForm.amount), paid: dailyForm.paid, notes: [dailyForm.route, dailyForm.trips ? dailyForm.trips + " trips" : "", dailyForm.notes].filter(Boolean).join(" · ") };
+      const { data, error } = await supabase.from("weeks").update(updates).eq("id", editingDailyId).select().single();
+      if (!error) { setWeeks(w => w.map(x => x.id === editingDailyId ? data : x)); toast_("✓ Updated"); setShowW(false); setEditingDailyId(null); }
+      else toast_("Error saving");
+    } else {
+      const row = { car_id: dailyForm.carId, user_id: userId, week_start: dailyForm.date, week_end: dailyForm.date, km: 0, daily_km: null, amount: Number(dailyForm.amount), paid: dailyForm.paid, notes: [dailyForm.route, dailyForm.trips ? dailyForm.trips + " trips" : "", dailyForm.notes].filter(Boolean).join(" · ") };
+      const { data, error } = await supabase.from("weeks").insert(row).select().single();
+      if (!error) { setWeeks(w => [data, ...w]); toast_("✓ Day logged — " + fmt(Number(dailyForm.amount))); setShowW(false); setDailyForm({ carId: cars[0]?.id || "", date: today(), route: "", amount: "", trips: "", paid: true, notes: "" }); }
+      else toast_("Error saving");
+    }
+    setSyncing(false);
   }
 
   async function handleSaveCost() {
@@ -2171,19 +2270,31 @@ export default function App({ session }) {
 
       <header style={S.header}>
         <div style={S.logo}>⚡ FleetMate</div>
-        <span style={{ fontSize: 10, color: C.muted, background: C.faint, borderRadius: 6, padding: "2px 7px", marginLeft: 2 }}>{cfg.icon} {cfg.label}</span>
+        <span style={{ fontSize: 10, color: C.muted, background: C.faint, borderRadius: 6, padding: "3px 8px", marginLeft: 2 }}>{cfg.icon} {cfg.label}</span>
         {(allAlerts.length + docAlerts.length) > 0 && (
-          <span onClick={() => setView(allAlerts.length ? "maintenance" : "docs")} style={{ background: C.amber + "22", color: C.amber, borderRadius: 99, padding: "2px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+          <span onClick={() => setView(allAlerts.length ? "maintenance" : "docs")}
+            style={{ background: C.amber + "22", color: C.amber, borderRadius: 99, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", border: "1px solid " + C.amber + "44" }}>
             ⚠ {allAlerts.length + docAlerts.length}
           </span>
         )}
-        <nav style={{ display: "flex", gap: 2, marginLeft: "auto" }}>
-          {nav.map(n => (
-            <button key={n.id} onClick={() => setView(n.id)} style={{ background: view === n.id ? C.faint : "transparent", color: view === n.id ? C.text : C.muted, border: "none", borderRadius: 7, padding: "6px 10px", cursor: "pointer", fontSize: 12, fontWeight: view === n.id ? 600 : 400 }}>{n.label}</button>
-          ))}
-          <button onClick={signOut} style={{ background: "transparent", color: C.muted, border: "none", borderRadius: 7, padding: "6px 10px", cursor: "pointer", fontSize: 12 }}>Sign out</button>
-        </nav>
+        <button onClick={signOut} style={{ marginLeft: "auto", background: "transparent", color: C.muted, border: "1px solid " + C.border, borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}>Sign out</button>
       </header>
+
+      {/* Bottom tab bar — primary navigation */}
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface + "f0", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderTop: "1px solid " + C.border, display: "flex", zIndex: 99, height: 58, alignItems: "stretch" }}>
+        {nav.map(n => {
+          const icons = { dashboard: "◈", weekly: "📅", costs: "💸", maintenance: "🔧", docs: "📋", cars: "🚗", kombis: "🚌", trucks: "🚛", buses: "🏫" };
+          const icon = icons[n.id] || icons[n.label.toLowerCase()] || "●";
+          const active = view === n.id;
+          return (
+            <button key={n.id} onClick={() => setView(n.id)} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, color: active ? C.cyan : C.muted, transition: "color 0.15s", position: "relative" }}>
+              {active && <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: 2, background: C.cyan, borderRadius: "0 0 3px 3px" }} />}
+              <span style={{ fontSize: 16, lineHeight: 1 }}>{icon}</span>
+              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: "0.04em" }}>{n.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       {view === "dashboard" && (
         <Dashboard cars={cars} weeks={weeks} costs={costs} allAlerts={allAlerts} docAlerts={docAlerts} paymentAlerts={paymentAlerts} missingWeekAlerts={missingWeekAlerts} carName={carName} setView={setView} sector={sector} />
@@ -2197,6 +2308,9 @@ export default function App({ session }) {
           editingWeekId={editingWeekId} setEditingWeekId={setEditingWeekId}
           activeDay={activeDay} setActiveDay={setActiveDay} syncing={syncing} blankDaily={blankDaily}
           onSaveWeek={handleSaveWeek} onCancelWeekForm={cancelWeekForm} onStartEditWeek={startEditWeek}
+          cfg={cfg} sector={sector}
+          dailyForm={dailyForm} setDailyForm={setDailyForm} editingDailyId={editingDailyId}
+          onSaveDaily={handleSaveDaily} onCancelDaily={() => { setShowW(false); setEditingDailyId(null); }}
         />
       )}
 
