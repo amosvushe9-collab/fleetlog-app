@@ -1042,30 +1042,36 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
       out.push({ level: "danger", text: s.car.name + " is running at a loss — earned " + fmt(s.totalReceived) + " but costs were " + fmt(s.totalCosts) + ". Net: " + fmt(s.net) + ". Check if recent repairs are a one-off or a pattern." });
     });
 
-    // 2. $/km efficiency gap between cars
-    const ranked = [...monthCarStats].filter(s => s.perKm > 0).sort((a, b) => b.perKm - a.perKm);
+    // 2. $/km efficiency gap — use perKm but fall back to net/weekCount if km=0
+    const ranked = [...monthCarStats]
+      .map(s => ({ ...s, efficiencyScore: s.perKm > 0 ? s.perKm : (s.weekCount > 0 ? s.net / s.weekCount : 0) }))
+      .filter(s => s.efficiencyScore > 0)
+      .sort((a, b) => b.efficiencyScore - a.efficiencyScore);
     if (ranked.length >= 2) {
       const best = ranked[0], worst = ranked[ranked.length - 1];
-      const gap = ((best.perKm - worst.perKm) / best.perKm * 100).toFixed(0);
-      if (gap > 15) {
-        out.push({ level: "warn", text: best.car.name + " earns " + fmtRate(best.perKm) + " while " + worst.car.name + " earns " + fmtRate(worst.perKm) + " — a " + gap + "% efficiency gap. " + worst.car.name + " may have higher costs or lower mileage." });
+      if (best.perKm > 0 && worst.perKm > 0) {
+        const gap = ((best.perKm - worst.perKm) / best.perKm * 100).toFixed(0);
+        if (Number(gap) > 15) {
+          out.push({ level: "warn", text: best.car.name + " earns " + fmtRate(best.perKm) + " while " + worst.car.name + " earns " + fmtRate(worst.perKm) + " — a " + gap + "% efficiency gap. " + worst.car.name + " may have higher costs or lower mileage worth investigating." });
+        }
       }
     }
 
     // 3. High cost ratio
     monthCarStats.forEach(s => {
-      if (s.totalReceived > 0) {
+      if (s.totalReceived > 0 && s.totalCosts > 0) {
         const costRatio = s.totalCosts / s.totalReceived;
-        if (costRatio > 0.5) {
-          out.push({ level: "warn", text: fmt(Math.round(costRatio * 100)) + "% of " + s.car.name + "'s earnings went to costs" + (selectedMonth === "all" ? " all time" : " this period") + ". Costs: " + fmt(s.totalCosts) + " vs earnings: " + fmt(s.totalReceived) + "." });
+        if (costRatio > 0.4) {
+          out.push({ level: costRatio > 0.7 ? "danger" : "warn", text: s.car.name + ": " + (costRatio * 100).toFixed(0) + "% of earnings went to costs" + (selectedMonth === "all" ? " all time" : " this period") + " — " + fmt(s.totalCosts) + " in costs against " + fmt(s.totalReceived) + " earned." });
         }
       }
     });
 
-    // 4. Positive — if all cars profitable
-    if (lossVehicles.length === 0 && monthCarStats.every(s => s.net > 0)) {
+    // 4. Fleet summary — always show overall health
+    if (lossVehicles.length === 0 && totNet > 0) {
+      const margin = ((totNet / totRec) * 100).toFixed(0);
       const bestEarner = [...monthCarStats].sort((a, b) => b.net - a.net)[0];
-      out.push({ level: "good", text: "All vehicles are profitable" + (selectedMonth === "all" ? "" : " this period") + ". Best performer: " + bestEarner.car.name + " with " + fmt(bestEarner.net) + " net profit." });
+      out.push({ level: "good", text: "Fleet is profitable at " + margin + "% margin — net " + fmt(totNet) + " on " + fmt(totRec) + " earned. Top performer: " + bestEarner.car.name + " with " + fmt(bestEarner.net) + " net." });
     }
 
     // 5. Unpaid weeks
@@ -1075,8 +1081,8 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
       out.push({ level: "warn", text: totalUnpaid + " week" + (totalUnpaid > 1 ? "s" : "") + " still unpaid — " + fmt(totalUnpaidAmt) + " outstanding. Follow up with your driver" + (totalUnpaid > 1 ? "s" : "") + "." });
     }
 
-    return out.slice(0, 4); // max 4 insights
-  }, [monthCarStats, totRec, selectedMonth]);
+    return out.slice(0, 4);
+  }, [monthCarStats, totRec, totNet, selectedMonth]);
 
   // Monthly trend for net profit — last 6 months
   const monthlyTrend = useMemo(() => {
@@ -1173,7 +1179,7 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
         </div>
       )}
 
-      <div style={{ ...S.row, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <Stat label="Total Received" value={fmt(totRec)} color={C.green} />
         <Stat label="Total Costs" value={fmt(totCost)} color={C.red} />
         <Stat label="Net Profit" value={fmt(totNet)} color={totNet >= 0 ? C.green : C.red} />
