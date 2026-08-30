@@ -1047,7 +1047,7 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
     if (ranked.length >= 2) {
       const best = ranked[0], worst = ranked[ranked.length - 1];
       const gap = ((best.perKm - worst.perKm) / best.perKm * 100).toFixed(0);
-      if (gap > 20) {
+      if (gap > 15) {
         out.push({ level: "warn", text: best.car.name + " earns " + fmtRate(best.perKm) + " while " + worst.car.name + " earns " + fmtRate(worst.perKm) + " — a " + gap + "% efficiency gap. " + worst.car.name + " may have higher costs or lower mileage." });
       }
     }
@@ -1180,6 +1180,29 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
         <Stat label="Fleet km" value={fmtKm(totKm)} color={C.cyan} />
       </div>
 
+      {/* Insights Panel — right after summary stats so it's seen immediately */}
+      {insights.length > 0 && (
+        <div style={{ ...S.card, marginBottom: 16, borderColor: insights.some(i => i.level === "danger") ? C.red + "66" : insights.some(i => i.level === "warn") ? C.amber + "66" : C.green + "66" }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>🧠</span>
+            <span style={{ color: C.text }}>Fleet Insights</span>
+            <span style={{ fontSize: 10, color: C.muted, marginLeft: "auto" }}>{selectedMonth === "all" ? "All time" : monthLabel(selectedMonth)}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {insights.map((ins, i) => {
+              const col = ins.level === "danger" ? C.red : ins.level === "good" ? C.green : C.amber;
+              const icon = ins.level === "danger" ? "⚠" : ins.level === "good" ? "✓" : "ℹ";
+              return (
+                <div key={i} style={{ display: "flex", gap: 10, padding: "10px 12px", background: col + "10", borderRadius: 10, borderLeft: "3px solid " + col }}>
+                  <span style={{ color: col, fontSize: 14, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+                  <span style={{ color: C.text, fontSize: 13, lineHeight: 1.5 }}>{ins.text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ ...S.row, marginBottom: 16 }}>
         {monthCarStats.map(({ car, totalKm, totalReceived, totalCosts, net, perKm, avgWeeklyKm, unpaidCount, unpaidAmt }) => {
           const odo = currentOdometer(car, weeks); // odometer is always true total-to-date, not month-scoped
@@ -1211,29 +1234,6 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
       </div>
 
       </div>
-
-      {/* Insights Panel */}
-      {insights.length > 0 && (
-        <div style={{ ...S.card, marginBottom: 16, borderColor: insights.some(i => i.level === "danger") ? C.red + "66" : C.amber + "66" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 16 }}>🧠</span>
-            <span style={{ color: C.text }}>Fleet Insights</span>
-            <span style={{ fontSize: 10, color: C.muted, marginLeft: "auto" }}>{selectedMonth === "all" ? "All time" : monthLabel(selectedMonth)}</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {insights.map((ins, i) => {
-              const col = ins.level === "danger" ? C.red : ins.level === "good" ? C.green : C.amber;
-              const icon = ins.level === "danger" ? "⚠" : ins.level === "good" ? "✓" : "ℹ";
-              return (
-                <div key={i} style={{ display: "flex", gap: 10, padding: "10px 12px", background: col + "10", borderRadius: 10, borderLeft: "3px solid " + col }}>
-                  <span style={{ color: col, fontSize: 14, flexShrink: 0, marginTop: 1 }}>{icon}</span>
-                  <span style={{ color: C.text, fontSize: 13, lineHeight: 1.5 }}>{ins.text}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Monthly Net Profit Trend */}
       {monthlyTrend.length >= 2 && (
