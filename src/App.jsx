@@ -1245,8 +1245,6 @@ function Dashboard({ cars, weeks, costs, allAlerts, docAlerts, paymentAlerts, mi
         })}
       </div>
 
-      </div>
-
       {/* Monthly Net Profit Trend */}
       {monthlyTrend.length >= 2 && (
         <div style={{ ...S.card, marginBottom: 16 }}>
