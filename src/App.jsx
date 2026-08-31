@@ -1067,11 +1067,14 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
       }
     });
 
-    // 4. Fleet summary — always show overall health
+    // 4. Fleet summary — always show overall health with time period
     if (lossVehicles.length === 0 && totNet > 0) {
       const margin = ((totNet / totRec) * 100).toFixed(0);
       const bestEarner = [...monthCarStats].sort((a, b) => b.net - a.net)[0];
-      out.push({ level: "good", text: "Fleet is profitable at " + margin + "% margin — net " + fmt(totNet) + " on " + fmt(totRec) + " earned. Top performer: " + bestEarner.car.name + " with " + fmt(bestEarner.net) + " net." });
+      const period = selectedMonth === "all"
+        ? (weeks.length > 0 ? "since tracking started" : "all time")
+        : "in " + monthLabel(selectedMonth);
+      out.push({ level: "good", text: "Fleet is profitable at " + margin + "% margin " + period + " — net " + fmt(totNet) + " on " + fmt(totRec) + " earned. Top performer: " + bestEarner.car.name + " with " + fmt(bestEarner.net) + " net." });
     }
 
     // 5. Unpaid weeks
@@ -1081,7 +1084,7 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
       out.push({ level: "warn", text: totalUnpaid + " week" + (totalUnpaid > 1 ? "s" : "") + " still unpaid — " + fmt(totalUnpaidAmt) + " outstanding. Follow up with your driver" + (totalUnpaid > 1 ? "s" : "") + "." });
     }
 
-    // 6. Accident/repair pattern — if one car has significantly more incidents or repair costs
+    // 6. Accident/repair pattern
     if (incidents && incidents.length > 0) {
       const incidentsBycar = {};
       cars.forEach(car => { incidentsBycar[car.id] = { car, count: 0, totalRepair: 0 }; });
@@ -1095,7 +1098,7 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
       if (incList.length > 0) {
         const mostIncidents = incList.sort((a, b) => b.count - a.count)[0];
         if (mostIncidents.count >= 2) {
-          out.push({ level: "warn", text: mostIncidents.car.name + " has been involved in " + mostIncidents.count + " incident" + (mostIncidents.count > 1 ? "s" : "") + (mostIncidents.totalRepair > 0 ? " with " + fmt(mostIncidents.totalRepair) + " in repair costs" : "") + ". Consider reviewing the driver's care record — recurring incidents may signal a pattern worth addressing." });
+          out.push({ level: "warn", text: mostIncidents.car.name + " has been involved in " + mostIncidents.count + " incidents" + (mostIncidents.totalRepair > 0 ? " with " + fmt(mostIncidents.totalRepair) + " in repair costs" : "") + ". Consider reviewing that driver's care record — recurring incidents may signal a pattern worth addressing." });
         } else if (incList.length >= 2) {
           const sorted = incList.sort((a, b) => b.totalRepair - a.totalRepair);
           if (sorted[0].totalRepair > 0 && sorted[0].totalRepair > sorted[1].totalRepair * 2) {
@@ -1105,10 +1108,10 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
       }
     }
 
-    return out.slice(0, 5);
-  }, [monthCarStats, totRec, totNet, selectedMonth, incidents]);
+    return out.slice(0, 6);
+  }, [monthCarStats, totRec, totNet, selectedMonth, incidents, weeks]);
 
-  // Monthly trend for net profit — last 6 months
+  // Monthly trend — best and worst months analysis (always all-time, not filtered)
   const monthlyTrend = useMemo(() => {
     const allMonths = [...new Set([...weeks.map(w => monthKey(w.week_start)), ...costs.map(c => monthKey(c.date))])].filter(Boolean).sort().slice(-6);
     return allMonths.map(mk => {
@@ -1116,7 +1119,14 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
       const mc = costs.filter(c => monthKey(c.date) === mk);
       const rec = mw.filter(w => w.paid).reduce((s, w) => s + Number(w.amount || 0), 0);
       const cost = mc.reduce((s, c) => s + Number(c.amount || 0), 0);
-      return { month: mk, net: rec - cost, rec, cost };
+      const net = rec - cost;
+      const highCostCar = (() => {
+        const byCar = {};
+        mc.forEach(c => { byCar[c.car_id] = (byCar[c.car_id] || 0) + Number(c.amount || 0); });
+        const top = Object.entries(byCar).sort((a, b) => b[1] - a[1])[0];
+        return top ? { carId: top[0], amount: top[1] } : null;
+      })();
+      return { month: mk, net, rec, cost, highCostCar };
     });
   }, [weeks, costs]);
 
@@ -1212,15 +1222,64 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
 
       {/* Insights Panel — between summary stats and per-car breakdown */}
       {insights.length > 0 && (function() {
+        // Build best/worst month summary for speech
+        function getBestWorstMonthText() {
+          if (monthlyTrend.length < 2) return "";
+          const sorted = [...monthlyTrend].sort((a, b) => b.net - a.net);
+          const best = sorted[0], worst = sorted[sorted.length - 1];
+          const bestLabel = monthLabel(best.month);
+          const worstLabel = monthLabel(worst.month);
+          let text = " Looking at monthly trends: ";
+          text += "Best month was " + bestLabel + " with " + fmt(best.net) + " net profit";
+          if (best.cost > 0) text += " — low costs of " + fmt(best.cost) + " helped";
+          else text += " — minimal costs that month";
+          text += ". ";
+          if (worst.net < 0) {
+            text += "Worst month was " + worstLabel + " which ran at a loss of " + fmt(Math.abs(worst.net));
+            if (worst.cost > worst.rec * 0.5) text += " — high costs of " + fmt(worst.cost) + " were the main reason";
+          } else {
+            text += "Lowest profit month was " + worstLabel + " with " + fmt(worst.net) + " net";
+            if (worst.cost > best.cost * 1.5) text += " — costs were higher than usual at " + fmt(worst.cost);
+          }
+          text += ".";
+          return text;
+        }
+
         function speakInsights() {
           if (!window.speechSynthesis) return;
           window.speechSynthesis.cancel();
-          const text = "Fleet Insights. " + insights.map(ins => ins.text).join(". ");
-          const utt = new window.SpeechSynthesisUtterance(text);
-          utt.rate = 0.95;
-          utt.pitch = 1;
+          const insightText = insights.map(ins => ins.text).join(". ");
+          const monthText = getBestWorstMonthText();
+          const fullText = "Fleet Insights for your vehicles. " + insightText + monthText;
+          const utt = new window.SpeechSynthesisUtterance(fullText);
+
+          // Pick the best available voice — prefer natural-sounding ones
+          const voices = window.speechSynthesis.getVoices();
+          const preferred = [
+            "Google UK English Female", "Google UK English Male",
+            "Google US English", "Microsoft Zira", "Microsoft David",
+            "Samantha", "Karen", "Daniel", "Moira"
+          ];
+          let chosen = null;
+          for (const name of preferred) {
+            chosen = voices.find(v => v.name === name);
+            if (chosen) break;
+          }
+          // Fallback: pick any English voice that isn't the default robotic one
+          if (!chosen) chosen = voices.find(v => v.lang.startsWith("en") && !v.name.includes("espeak"));
+          if (chosen) utt.voice = chosen;
+
+          utt.rate = 0.88;   // slightly slower than default — more natural
+          utt.pitch = 1.05;  // very slightly higher — warmer sound
+          utt.volume = 1;
           window.speechSynthesis.speak(utt);
         }
+
+        // Handle voices loading asynchronously on some browsers
+        if (window.speechSynthesis && window.speechSynthesis.getVoices().length === 0) {
+          window.speechSynthesis.onvoiceschanged = () => {};
+        }
+
         function stopSpeaking() {
           if (window.speechSynthesis) window.speechSynthesis.cancel();
         }
