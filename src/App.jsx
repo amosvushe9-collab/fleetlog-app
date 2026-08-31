@@ -573,8 +573,9 @@ function CostForm({ cForm, setCForm, cars, editingCostId, syncing, onSave, onCan
   );
 }
 
-function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel }) {
-  const fileInputId = `doc-photo-${form.carId}`;
+function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel, editingDocId }) {
+  const fileInputId = "doc-photo-gallery-" + form.carId;
+  const cameraInputId = "doc-photo-camera-" + form.carId;
   function handlePhotoSelect(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -582,7 +583,7 @@ function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel }) 
   }
   return (
     <div style={{ ...S.card, maxWidth: 500, marginBottom: 16, borderColor: C.cyan + "44" }}>
-      <div style={{ fontWeight: 700, color: C.cyan, marginBottom: 14 }}>Add Document</div>
+      <div style={{ fontWeight: 700, color: C.cyan, marginBottom: 14 }}>{editingDocId ? "Edit Document" : "Add Document"}</div>
       <div style={{ ...S.row, marginBottom: 12 }}>
         <div style={{ flex: 1 }}><label style={S.label}>Car</label>
           <select style={S.input} value={form.carId} onChange={e => setForm(f => ({ ...f, carId: e.target.value }))}>
@@ -607,20 +608,31 @@ function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel }) 
       <div style={{ marginBottom: 14 }}>
         <label style={S.label}>Licence Disc Photo (optional)</label>
         {form.photoPreview ? (
-          <div style={{ position: "relative", display: "inline-block" }}>
-            <img src={form.photoPreview} alt="Disc" style={{ width: 100, height: 100, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.border}` }} />
+          <div style={{ position: "relative", display: "inline-block", marginBottom: 8 }}>
+            <img src={form.photoPreview} alt="Disc" style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8, border: "1px solid " + C.border }} />
             <button onClick={() => setForm(f => ({ ...f, photoFile: null, photoPreview: null }))}
-              style={{ position: "absolute", top: 4, right: 4, background: "#000a", color: "#fff", border: "none", borderRadius: 99, width: 20, height: 20, cursor: "pointer", fontSize: 11 }}>✕</button>
+              style={{ position: "absolute", top: 4, right: 4, background: "#000a", color: "#fff", border: "none", borderRadius: 99, width: 22, height: 22, cursor: "pointer", fontSize: 12 }}>✕</button>
           </div>
         ) : (
-          <label htmlFor={fileInputId} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 14px", border: `1px dashed ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.muted, fontSize: 12 }}>
-            📎 Attach disc photo
-          </label>
+          <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+            {/* Camera — opens camera directly */}
+            <label htmlFor={cameraInputId} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", border: "1px solid " + C.cyan + "66", borderRadius: 8, cursor: "pointer", color: C.cyan, fontSize: 12, background: C.cyan + "11" }}>
+              📷 Take Photo
+            </label>
+            {/* Gallery — opens file picker */}
+            <label htmlFor={fileInputId} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", border: "1px dashed " + C.border, borderRadius: 8, cursor: "pointer", color: C.muted, fontSize: 12 }}>
+              📁 Choose File
+            </label>
+          </div>
         )}
-        <input id={fileInputId} type="file" accept="image/*" onChange={handlePhotoSelect} style={{ display: "none" }} />
+        {/* Camera input — capture=environment forces rear camera */}
+        <input id={cameraInputId} type="file" accept="image/*" capture="environment" onChange={handlePhotoSelect} style={{ display: "none" }} />
+        {/* Gallery input — no capture attribute so shows full file picker */}
+        <input id={fileInputId} type="file" accept="image/*,application/pdf" onChange={handlePhotoSelect} style={{ display: "none" }} />
+        <div style={{ fontSize: 10, color: C.muted }}>Take a photo of the disc, or upload from gallery / PDF</div>
       </div>
       <div style={S.row}>
-        <button style={S.btn()} onClick={onSave} disabled={syncing || uploading}>{uploading ? "Uploading..." : syncing ? "Saving..." : "Save"}</button>
+        <button style={S.btn()} onClick={onSave} disabled={syncing || uploading}>{uploading ? "Uploading..." : syncing ? "Saving..." : editingDocId ? "Update" : "Save"}</button>
         <button style={S.ghost} onClick={onCancel}>Cancel</button>
       </div>
     </div>
@@ -1684,7 +1696,8 @@ function Maintenance({
   );
 }
 
-function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, syncing, uploading, onSaveDoc,
+function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, syncing, uploading, onSaveDoc, onCancelDoc,
+  editingDocId, onStartEditDoc,
   incidents, setIncidents, incidentForm, setIncidentForm, showIncidentForm, setShowIncidentForm,
   onSaveIncident, updateIncidentStatus, carName, carColor, onStartEditIncident, editingIncidentId }) {
   const grouped = cars.map(car => {
@@ -1703,11 +1716,11 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
     <div style={S.page}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div><div style={S.title}>Documents</div><div style={S.sub}>Insurance, ZINARA, roadworthy</div></div>
-        <button style={S.btn()} onClick={() => setShowForm(v => !v)}>+ Add</button>
+        <button style={S.btn()} onClick={() => { if (onCancelDoc) onCancelDoc(); setShowForm(v => !v); }}>+ Add</button>
       </div>
 
       {showForm && (
-        <DocForm form={form} setForm={setForm} cars={cars} syncing={syncing} uploading={uploading} onSave={onSaveDoc} onCancel={() => setShowForm(false)} />
+        <DocForm form={form} setForm={setForm} cars={cars} syncing={syncing} uploading={uploading} onSave={onSaveDoc} onCancel={onCancelDoc || (() => setShowForm(false))} editingDocId={editingDocId} />
       )}
 
       {grouped.map(({ car, byType }) => (
@@ -1727,7 +1740,10 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.color + "18", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap" }}>{st.label}</span>
-                    <button onClick={() => del("docs", current.id, setDocs)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }}>✕</button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <button onClick={() => onStartEditDoc && onStartEditDoc(current)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }} title="Edit">✎</button>
+                      <button onClick={() => del("docs", current.id, setDocs)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }}>✕</button>
+                    </div>
                   </div>
                 </div>
                 {history.length > 0 && (
@@ -1950,6 +1966,7 @@ export default function App({ session }) {
   const [showW, setShowW] = useState(false);
   const [showC, setShowC] = useState(false);
   const [showDocForm, setShowDocForm] = useState(false);
+  const [editingDocId, setEditingDocId] = useState(null);
   const [showAddCar, setShowAddCar] = useState(false);
   const [newCar, setNewCar] = useState({ name: "", color: C.cyan, weeklyRate: 130, odometerBaseline: "", odometerDate: today() });
   const [editingOdoCarId, setEditingOdoCarId] = useState(null);
@@ -2219,14 +2236,27 @@ export default function App({ session }) {
     setSyncing(false);
   }
 
+  function startEditDoc(doc) {
+    setEditingDocId(doc.id);
+    setDocForm({ carId: doc.car_id, type: doc.type, expiry: doc.expiry, notes: doc.notes || "", photoFile: null, photoPreview: doc.photo_url || null });
+    setShowDocForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelDocForm() {
+    setShowDocForm(false);
+    setEditingDocId(null);
+    setDocForm(f => ({ ...f, expiry: "", notes: "", photoFile: null, photoPreview: null }));
+  }
+
   async function handleSaveDoc() {
     if (!docForm.carId || !docForm.type || !docForm.expiry) return;
     setSyncing(true);
-    let photoUrl = null;
+    let photoUrl = editingDocId ? (docForm.photoPreview && !docForm.photoFile ? docForm.photoPreview : null) : null;
     if (docForm.photoFile) {
       setUploadingPhoto(true);
       const ext = docForm.photoFile.name.split(".").pop() || "jpg";
-      const path = `${userId}/${docForm.carId}-${Date.now()}.${ext}`;
+      const path = userId + "/" + docForm.carId + "-" + Date.now() + "." + ext;
       const { error: uploadError } = await supabase.storage.from("doc-photos").upload(path, docForm.photoFile);
       setUploadingPhoto(false);
       if (!uploadError) {
@@ -2234,14 +2264,23 @@ export default function App({ session }) {
         photoUrl = urlData?.publicUrl || null;
       }
     }
-    const row = { car_id: docForm.carId, user_id: userId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, photo_url: photoUrl };
-    const { data, error } = await supabase.from("docs").insert(row).select().single();
-    if (!error) {
-      setDocs(d => [...d, data].sort((a, b) => new Date(a.expiry) - new Date(b.expiry)));
-      toast_("✓ Document saved");
-      setShowDocForm(false);
-      setDocForm(f => ({ ...f, expiry: "", notes: "", photoFile: null, photoPreview: null }));
-    } else toast_("Error saving");
+    if (editingDocId) {
+      const updates = { car_id: docForm.carId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, photo_url: photoUrl };
+      const { data, error } = await supabase.from("docs").update(updates).eq("id", editingDocId).select().single();
+      if (!error) {
+        setDocs(d => d.map(x => x.id === editingDocId ? data : x).sort((a, b) => new Date(a.expiry) - new Date(b.expiry)));
+        toast_("✓ Document updated");
+        cancelDocForm();
+      } else toast_("Error saving");
+    } else {
+      const row = { car_id: docForm.carId, user_id: userId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, photo_url: photoUrl };
+      const { data, error } = await supabase.from("docs").insert(row).select().single();
+      if (!error) {
+        setDocs(d => [...d, data].sort((a, b) => new Date(a.expiry) - new Date(b.expiry)));
+        toast_("✓ Document saved");
+        cancelDocForm();
+      } else toast_("Error saving");
+    }
     setSyncing(false);
   }
 
@@ -2570,7 +2609,8 @@ export default function App({ session }) {
           docs={docs} cars={cars} del={del} setDocs={setDocs}
           showForm={showDocForm} setShowForm={setShowDocForm}
           form={docForm} setForm={setDocForm} syncing={syncing} uploading={uploadingPhoto}
-          onSaveDoc={handleSaveDoc}
+          onSaveDoc={handleSaveDoc} onCancelDoc={cancelDocForm}
+          editingDocId={editingDocId} onStartEditDoc={startEditDoc}
           incidents={incidents} setIncidents={setIncidents}
           incidentForm={incidentForm} setIncidentForm={setIncidentForm}
           showIncidentForm={showIncidentForm} setShowIncidentForm={setShowIncidentForm}
