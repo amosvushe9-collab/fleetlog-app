@@ -3,17 +3,20 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  build: {
+    target: ['chrome60', 'safari12', 'firefox60'],
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'FleetLog',
-        short_name: 'FleetLog',
-        description: 'InDrive car owner fleet tracker',
-        theme_color: '#0f1623',
-        background_color: '#080c14',
+        name: 'FleetMate',
+        short_name: 'FleetMate',
+        description: 'Fleet management for transport operators',
+        theme_color: '#0c1220',
+        background_color: '#060910',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
