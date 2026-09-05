@@ -5,6 +5,24 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   build: {
     target: ['chrome60', 'safari12', 'firefox60'],
+    rollupOptions: {
+      output: {
+        // Split vendor libraries from app code so they cache separately
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'supabase': ['@supabase/supabase-js'],
+        }
+      }
+    },
+    // Compress more aggressively
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,  // remove console.logs
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.error'],
+      }
+    }
   },
   plugins: [
     react(),
