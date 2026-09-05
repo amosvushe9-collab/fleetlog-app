@@ -1294,25 +1294,34 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
           const insightText = insights.map(ins => ins.text).join(". ");
           const monthText = getBestWorstMonthText();
           const fullText = "Fleet Insights. " + insightText + monthText;
-          const utt = new window.SpeechSynthesisUtterance(fullText);
 
-          // Only use Google voices — they're the only consistently good ones on Android
-          // If none available, use system default (don't try to be clever with fallbacks)
-          const voices = window.speechSynthesis.getVoices();
-          const maleVoice = voices.find(v => v.name === "Google UK English Male")
-            || voices.find(v => v.name === "Google US English")
-            || voices.find(v => v.name.includes("Google") && v.lang.startsWith("en"));
-          if (maleVoice) utt.voice = maleVoice;
+          function doSpeak() {
+            const utt = new window.SpeechSynthesisUtterance(fullText);
+            const v = window.speechSynthesis.getVoices();
+            // Try specific male voices first, then any Google English, then any English
+            const male = v.find(x => x.name === "Google UK English Male")
+              || v.find(x => x.name === "Google US English")
+              || v.find(x => x.name.toLowerCase().includes("male") && x.lang.startsWith("en"))
+              || v.find(x => x.name.includes("Google") && x.lang.startsWith("en-GB"))
+              || v.find(x => x.name.includes("Google") && x.lang.startsWith("en"))
+              || v.find(x => x.lang === "en-GB")
+              || v.find(x => x.lang.startsWith("en-"));
+            if (male) utt.voice = male;
+            utt.rate = 0.95;
+            utt.pitch = 0.9;  // slightly lower pitch = more masculine
+            utt.volume = 1;
+            window.speechSynthesis.speak(utt);
+          }
 
-          utt.rate = 1.0;
-          utt.pitch = 1.0;
-          utt.volume = 1;
-          window.speechSynthesis.speak(utt);
-        }
-
-        // Handle voices loading asynchronously on some browsers
-        if (window.speechSynthesis && window.speechSynthesis.getVoices().length === 0) {
-          window.speechSynthesis.onvoiceschanged = () => {};
+          const loaded = window.speechSynthesis.getVoices();
+          if (loaded.length > 0) {
+            doSpeak();
+          } else {
+            window.speechSynthesis.onvoiceschanged = function() {
+              window.speechSynthesis.onvoiceschanged = null;
+              doSpeak();
+            };
+          }
         }
 
         function stopSpeaking() {
