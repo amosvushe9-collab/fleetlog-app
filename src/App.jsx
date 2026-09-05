@@ -1,5 +1,36 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Component } from "react";
 import { supabase } from './supabase.js'
+
+// Error boundary — catches JS crashes and shows friendly message instead of black screen
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error("FleetMate error:", error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: "100vh", background: "#060910", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "sans-serif" }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>⚡</div>
+          <div style={{ color: "#00c8e8", fontSize: 22, fontWeight: 800, marginBottom: 8 }}>FleetMate</div>
+          <div style={{ color: "#f0f4f8", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Something went wrong</div>
+          <div style={{ color: "#5a7a9a", fontSize: 13, textAlign: "center", marginBottom: 24, maxWidth: 300 }}>
+            Your data is safe. Please try refreshing the page. If the problem continues, try clearing your browser cache.
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ background: "#00c8e8", color: "#000", border: "none", borderRadius: 10, padding: "12px 28px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+          >
+            Refresh App
+          </button>
+          <div style={{ color: "#2a3f5a", fontSize: 11, marginTop: 16 }}>
+            {this.state.error?.message || "Unknown error"}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function uid() { return crypto.randomUUID(); }
@@ -1935,7 +1966,7 @@ function Cars({
 // MAIN APP — owns all state, wires it into the page components above
 // ════════════════════════════════════════════════════════════════════════════
 
-export default function App({ session }) {
+function AppInner({ session }) {
   const userId = session.user.id;
 
   const [cars, setCars]   = useState([]);
@@ -2632,5 +2663,13 @@ export default function App({ session }) {
         />
       )}
     </div>
+  );
+}
+
+export default function App(props) {
+  return (
+    <ErrorBoundary>
+      <AppInner {...props} />
+    </ErrorBoundary>
   );
 }
