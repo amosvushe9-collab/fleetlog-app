@@ -1293,27 +1293,18 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
           window.speechSynthesis.cancel();
           const insightText = insights.map(ins => ins.text).join(". ");
           const monthText = getBestWorstMonthText();
-          const fullText = "Fleet Insights for your vehicles. " + insightText + monthText;
+          const fullText = "Fleet Insights. " + insightText + monthText;
           const utt = new window.SpeechSynthesisUtterance(fullText);
 
-          // Pick the best available voice — prefer natural-sounding ones
+          // Only use Google voices — they're the only consistently good ones on Android
+          // If none available, use system default (don't try to be clever with fallbacks)
           const voices = window.speechSynthesis.getVoices();
-          const preferred = [
-            "Google UK English Female", "Google UK English Male",
-            "Google US English", "Microsoft Zira", "Microsoft David",
-            "Samantha", "Karen", "Daniel", "Moira"
-          ];
-          let chosen = null;
-          for (const name of preferred) {
-            chosen = voices.find(v => v.name === name);
-            if (chosen) break;
-          }
-          // Fallback: pick any English voice that isn't the default robotic one
-          if (!chosen) chosen = voices.find(v => v.lang.startsWith("en") && !v.name.includes("espeak"));
-          if (chosen) utt.voice = chosen;
+          const googleVoice = voices.find(v => v.name.startsWith("Google") && v.lang.startsWith("en"));
+          if (googleVoice) utt.voice = googleVoice;
+          // No voice set = browser picks its own default, which is fine
 
-          utt.rate = 0.88;   // slightly slower than default — more natural
-          utt.pitch = 1.05;  // very slightly higher — warmer sound
+          utt.rate = 1.0;   // normal speed — no modifications
+          utt.pitch = 1.0;  // normal pitch — no modifications
           utt.volume = 1;
           window.speechSynthesis.speak(utt);
         }
