@@ -1263,90 +1263,13 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
         <Stat label="Fleet km" value={fmtKm(totKm)} color={C.cyan} />
       </div>
 
-      {/* Insights Panel — between summary stats and per-car breakdown */}
-      {insights.length > 0 && (function() {
-        // Build best/worst month summary for speech
-        function getBestWorstMonthText() {
-          if (monthlyTrend.length < 2) return "";
-          const sorted = [...monthlyTrend].sort((a, b) => b.net - a.net);
-          const best = sorted[0], worst = sorted[sorted.length - 1];
-          const bestLabel = monthLabel(best.month);
-          const worstLabel = monthLabel(worst.month);
-          let text = " Looking at monthly trends: ";
-          text += "Best month was " + bestLabel + " with " + fmt(best.net) + " net profit";
-          if (best.cost > 0) text += " — low costs of " + fmt(best.cost) + " helped";
-          else text += " — minimal costs that month";
-          text += ". ";
-          if (worst.net < 0) {
-            text += "Worst month was " + worstLabel + " which ran at a loss of " + fmt(Math.abs(worst.net));
-            if (worst.cost > worst.rec * 0.5) text += " — high costs of " + fmt(worst.cost) + " were the main reason";
-          } else {
-            text += "Lowest profit month was " + worstLabel + " with " + fmt(worst.net) + " net";
-            if (worst.cost > best.cost * 1.5) text += " — costs were higher than usual at " + fmt(worst.cost);
-          }
-          text += ".";
-          return text;
-        }
-
-        function speakInsights() {
-          if (!window.speechSynthesis) return;
-          window.speechSynthesis.cancel();
-          const insightText = insights.map(ins => ins.text).join(". ");
-          const monthText = getBestWorstMonthText();
-          const fullText = "Fleet Insights. " + insightText + monthText;
-
-          function doSpeak() {
-            const utt = new window.SpeechSynthesisUtterance(fullText);
-            const v = window.speechSynthesis.getVoices();
-            // Try specific male voices first, then any Google English, then any English
-            const male = v.find(x => x.name === "Google UK English Male")
-              || v.find(x => x.name === "Google US English")
-              || v.find(x => x.name.toLowerCase().includes("male") && x.lang.startsWith("en"))
-              || v.find(x => x.name.includes("Google") && x.lang.startsWith("en-GB"))
-              || v.find(x => x.name.includes("Google") && x.lang.startsWith("en"))
-              || v.find(x => x.lang === "en-GB")
-              || v.find(x => x.lang.startsWith("en-"));
-            if (male) utt.voice = male;
-            utt.rate = 0.95;
-            utt.pitch = 0.9;  // slightly lower pitch = more masculine
-            utt.volume = 1;
-            window.speechSynthesis.speak(utt);
-          }
-
-          const loaded = window.speechSynthesis.getVoices();
-          if (loaded.length > 0) {
-            doSpeak();
-          } else {
-            window.speechSynthesis.onvoiceschanged = function() {
-              window.speechSynthesis.onvoiceschanged = null;
-              doSpeak();
-            };
-          }
-        }
-
-        function stopSpeaking() {
-          if (window.speechSynthesis) window.speechSynthesis.cancel();
-        }
-        return (
+      {/* Insights Panel */}
+      {insights.length > 0 && (
         <div style={{ ...S.card, marginBottom: 16, borderColor: insights.some(i => i.level === "danger") ? C.red + "66" : insights.some(i => i.level === "warn") ? C.amber + "66" : C.green + "66" }}>
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 16 }}>🧠</span>
             <span style={{ color: C.text }}>Fleet Insights</span>
             <span style={{ fontSize: 10, color: C.muted, marginLeft: "auto" }}>{selectedMonth === "all" ? "All time" : monthLabel(selectedMonth)}</span>
-            <button
-              onClick={speakInsights}
-              title="Read insights out loud"
-              style={{ background: C.faint, border: "1px solid " + C.border, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 14, color: C.cyan, display: "flex", alignItems: "center", gap: 4 }}
-            >
-              🔊 <span style={{ fontSize: 11, fontWeight: 600 }}>Read</span>
-            </button>
-            <button
-              onClick={stopSpeaking}
-              title="Stop reading"
-              style={{ background: C.faint, border: "1px solid " + C.border, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 14, color: C.muted }}
-            >
-              ■
-            </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {insights.map((ins, i) => {
@@ -1361,8 +1284,7 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
             })}
           </div>
         </div>
-        );
-      })()}
+      )}
 
       <div style={{ ...S.row, marginBottom: 16 }}>
         {monthCarStats.map(({ car, totalKm, totalReceived, totalCosts, net, perKm, avgWeeklyKm, unpaidCount, unpaidAmt }) => {
