@@ -1,8 +1,8 @@
 import { supabase } from './supabase'
 
 const C = {
-  bg: "#080c14", surface: "#0f1623", border: "#1a2236",
-  text: "#e2e8f0", muted: "#64748b", cyan: "#22d3ee", faint: "#1e293b",
+  bg: "#060910", surface: "#111827", border: "#1e2d45",
+  text: "#f0f4f8", muted: "#5a7a9a", cyan: "#00c8e8", faint: "#162032",
 }
 
 export default function Auth() {
@@ -15,34 +15,32 @@ export default function Auth() {
 
   return (
     <div style={{
-      minHeight: "100vh", background: C.bg, display: "flex",
-      flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif",
+      minHeight: "100vh", background: "radial-gradient(ellipse at 15% 40%, #0c1a2e 0%, " + C.bg + " 50%), radial-gradient(ellipse at 85% 60%, #0a1525 0%, " + C.bg + " 50%)",
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      padding: 24, fontFamily: "'Inter','SF Pro Display','Segoe UI',sans-serif",
     }}>
-      {/* Logo */}
-      <div style={{ marginBottom: 48, textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
-        <div style={{ color: C.cyan, fontWeight: 800, fontSize: 32, letterSpacing: "-0.04em" }}>FleetLog</div>
-        <div style={{ color: C.muted, fontSize: 14, marginTop: 6 }}>InDrive Car Owner Tracker</div>
+      <div style={{ marginBottom: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 52, marginBottom: 12 }}>⚡</div>
+        <div style={{ color: C.cyan, fontWeight: 900, fontSize: 34, letterSpacing: "-0.05em" }}>FleetMate</div>
+        <div style={{ color: C.muted, fontSize: 14, marginTop: 8 }}>Fleet management for transport operators</div>
       </div>
 
-      {/* Card */}
       <div style={{
-        background: C.surface, border: `1px solid ${C.border}`,
+        background: C.surface, border: "1px solid " + C.border,
         borderRadius: 16, padding: 32, width: "100%", maxWidth: 360, textAlign: "center",
       }}>
-        <div style={{ color: C.text, fontWeight: 600, fontSize: 16, marginBottom: 8 }}>Welcome back</div>
+        <div style={{ color: C.text, fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Welcome</div>
         <div style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>
           Sign in to access your fleet data from any device
         </div>
 
         <button onClick={signInWithGoogle} style={{
-          width: "100%", padding: "12px 20px",
+          width: "100%", padding: "13px 20px",
           background: "#fff", color: "#1f2937",
           border: "none", borderRadius: 10,
           fontWeight: 700, fontSize: 15, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
         }}>
           <svg width="20" height="20" viewBox="0 0 48 48">
             <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.1 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.1-4z"/>
@@ -57,6 +55,10 @@ export default function Auth() {
           Your data is private and only visible to you.{" "}
           Works offline after first login.
         </div>
+      </div>
+
+      <div style={{ color: C.muted, fontSize: 10, marginTop: 24, opacity: 0.5 }}>
+        fleetmate.netlify.app
       </div>
     </div>
   )
