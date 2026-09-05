@@ -1299,12 +1299,13 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
           // Only use Google voices — they're the only consistently good ones on Android
           // If none available, use system default (don't try to be clever with fallbacks)
           const voices = window.speechSynthesis.getVoices();
-          const googleVoice = voices.find(v => v.name.startsWith("Google") && v.lang.startsWith("en"));
-          if (googleVoice) utt.voice = googleVoice;
-          // No voice set = browser picks its own default, which is fine
+          const maleVoice = voices.find(v => v.name === "Google UK English Male")
+            || voices.find(v => v.name === "Google US English")
+            || voices.find(v => v.name.includes("Google") && v.lang.startsWith("en"));
+          if (maleVoice) utt.voice = maleVoice;
 
-          utt.rate = 1.0;   // normal speed — no modifications
-          utt.pitch = 1.0;  // normal pitch — no modifications
+          utt.rate = 1.0;
+          utt.pitch = 1.0;
           utt.volume = 1;
           window.speechSynthesis.speak(utt);
         }
