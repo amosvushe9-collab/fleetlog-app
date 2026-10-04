@@ -2481,8 +2481,8 @@ function AppInner({ session }) {
     { id: "dashboard", label: "Dashboard" },
     { id: "weekly", label: cfg.incomeTab },
     { id: "costs", label: "Costs" },
-    { id: "maintenance", label: "Service" },
-    { id: "docs", label: "Docs" },
+    { id: "compliance", label: "Comply" },
+    { id: "incidents", label: "Incidents" },
     { id: "cars", label: cfg.vehiclesLabel },
   ];
 
@@ -2495,7 +2495,7 @@ function AppInner({ session }) {
         <div style={S.logo}>⚡ FleetMate</div>
         <span style={{ fontSize: 10, color: C.muted, background: C.faint, borderRadius: 6, padding: "3px 8px", marginLeft: 2 }}>{cfg.icon} {cfg.label}</span>
         {(allAlerts.length + docAlerts.length) > 0 && (
-          <span onClick={() => setView(allAlerts.length ? "maintenance" : "docs")}
+          <span onClick={() => setView(docAlerts.length ? "compliance" : "cars")}
             style={{ background: C.amber + "22", color: C.amber, borderRadius: 99, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", border: "1px solid " + C.amber + "44" }}>
             ⚠ {allAlerts.length + docAlerts.length}
           </span>
@@ -2506,7 +2506,7 @@ function AppInner({ session }) {
       {/* Bottom tab bar — primary navigation */}
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface + "f0", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderTop: "1px solid " + C.border, display: "flex", zIndex: 99, height: 58, alignItems: "stretch" }}>
         {nav.map(n => {
-          const icons = { dashboard: "◈", weekly: "📅", costs: "💸", maintenance: "🔧", docs: "📋", cars: "🚗", kombis: "🚌", trucks: "🚛", buses: "🏫" };
+          const icons = { dashboard: "◈", weekly: "📅", costs: "💸", compliance: "🛡️", incidents: "🔧", cars: "🚗", kombis: "🚌", trucks: "🚛", buses: "🏫" };
           const icon = icons[n.id] || icons[n.label.toLowerCase()] || "●";
           const active = view === n.id;
           return (
