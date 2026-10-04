@@ -1653,7 +1653,8 @@ function Maintenance({
 function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, syncing, uploading, onSaveDoc, onCancelDoc,
   editingDocId, onStartEditDoc,
   incidents, setIncidents, incidentForm, setIncidentForm, showIncidentForm, setShowIncidentForm,
-  onSaveIncident, updateIncidentStatus, carName, carColor, onStartEditIncident, editingIncidentId }) {
+  onSaveIncident, updateIncidentStatus, carName, carColor, onStartEditIncident, editingIncidentId,
+  hideIncidents, hideCompliance }) {
   const grouped = cars.map(car => {
     const carDocs = docs.filter(d => d.car_id === car.id);
     // Group by document type, sort each group newest-expiry-first so [0] is always "current"
@@ -1668,8 +1669,9 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
 
   return (
     <div style={S.page}>
+      {!hideCompliance && (<>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-        <div><div style={S.title}>Documents</div><div style={S.sub}>Insurance, ZINARA, roadworthy</div></div>
+        <div><div style={S.title}>🛡️ Compliance</div><div style={S.sub}>Insurance, ZINARA, roadworthy</div></div>
         <button style={S.btn()} onClick={() => { if (onCancelDoc) onCancelDoc(); setShowForm(v => !v); }}>+ Add</button>
       </div>
 
@@ -1718,12 +1720,14 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
           })}
         </div>
       ))}
+      </>)}
 
+      {!hideIncidents && (<>
       {/* Accident / Damage Records */}
-      <div style={{ marginTop: 24 }}>
+      <div style={{ marginTop: hideCompliance ? 0 : 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: C.red }}>🚗 Accidents & Damage</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: C.red }}>🔧 Accidents & Damage</div>
             <div style={{ fontSize: 12, color: C.muted }}>Repair quotations, status, and photos</div>
           </div>
           <button style={S.btn(C.red)} onClick={() => setShowIncidentForm(v => !v)}>+ Log Incident</button>
@@ -1825,6 +1829,7 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
           );
         })}
       </div>
+      </>)}
     </div>
   );
 }
@@ -2548,20 +2553,27 @@ function AppInner({ session }) {
         />
       )}
 
-      {view === "maintenance" && (
-        <Maintenance
-          cars={cars} weeks={weeks} markDone={markDone} serviceRecords={serviceRecords}
-          showServiceForm={showServiceForm} setShowServiceForm={setShowServiceForm}
-          serviceForm={serviceForm} setServiceForm={setServiceForm}
-          syncing={syncing} uploadingPhoto={uploadingPhoto}
-          onSaveServiceRecord={handleSaveServiceRecord} onDeleteServiceRecord={deleteServiceRecord}
-        />
-      )}
-
-      {view === "docs" && (
+      {view === "compliance" && (
         <Docs
           docs={docs} cars={cars} del={del} setDocs={setDocs}
           showForm={showDocForm} setShowForm={setShowDocForm}
+          form={docForm} setForm={setDocForm} syncing={syncing} uploading={uploadingPhoto}
+          onSaveDoc={handleSaveDoc} onCancelDoc={cancelDocForm}
+          editingDocId={editingDocId} onStartEditDoc={startEditDoc}
+          incidents={[]} setIncidents={setIncidents}
+          incidentForm={incidentForm} setIncidentForm={setIncidentForm}
+          showIncidentForm={false} setShowIncidentForm={() => {}}
+          onSaveIncident={handleSaveIncident} updateIncidentStatus={updateIncidentStatus}
+          onStartEditIncident={startEditIncident} editingIncidentId={editingIncidentId}
+          carName={carName} carColor={carColor}
+          hideIncidents
+        />
+      )}
+
+      {view === "incidents" && (
+        <Docs
+          docs={[]} cars={cars} del={del} setDocs={setDocs}
+          showForm={false} setShowForm={() => {}}
           form={docForm} setForm={setDocForm} syncing={syncing} uploading={uploadingPhoto}
           onSaveDoc={handleSaveDoc} onCancelDoc={cancelDocForm}
           editingDocId={editingDocId} onStartEditDoc={startEditDoc}
@@ -2571,6 +2583,7 @@ function AppInner({ session }) {
           onSaveIncident={handleSaveIncident} updateIncidentStatus={updateIncidentStatus}
           onStartEditIncident={startEditIncident} editingIncidentId={editingIncidentId}
           carName={carName} carColor={carColor}
+          hideCompliance
         />
       )}
 
