@@ -635,6 +635,10 @@ function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel, ed
           <input style={S.input} placeholder="policy number, etc." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
         </div>
       </div>
+      <div style={{ marginBottom: 12 }}>
+        <label style={S.label}>Amount Paid (USD)</label>
+        <input type="number" min="0" step="0.01" style={S.input} placeholder="e.g. 120.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+      </div>
       {form.expiry && (() => { const st = docStatus(form.expiry); return <div style={{ background: C.faint, borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: st.color, fontWeight: 600 }}>{st.label}</div>; })()}
       <div style={{ marginBottom: 14 }}>
         <label style={S.label}>Licence Disc Photo (optional)</label>
@@ -1712,6 +1716,7 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
                       <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Status</div><div style={{ fontWeight: 700, fontSize: 13, color: st.color }}>{st.label}</div></div>
                       <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Expiry Date</div><div style={{ fontWeight: 600, fontSize: 13 }}>{fmtDate(current.expiry)}</div></div>
                       <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Vehicle</div><div style={{ fontWeight: 600, fontSize: 13, color: car.color }}>{car.name}</div></div>
+                      {current.amount != null && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Amount Paid</div><div style={{ fontWeight: 700, fontSize: 14, color: C.green }}>${Number(current.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>}
                       {current.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Notes / Policy No.</div><div style={{ fontWeight: 600, fontSize: 13 }}>{current.notes}</div></div>}
                     </div>
                     {current.photo_url && (
@@ -1750,6 +1755,7 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px", marginBottom: 10 }}>
                               <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Expiry</div><div style={{ fontSize: 12, fontWeight: 600 }}>{fmtDate(d.expiry)}</div></div>
                               <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Superseded by</div><div style={{ fontSize: 12, fontWeight: 600 }}>{fmtDate(nextExpiry)}</div></div>
+                              {d.amount != null && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Amount Paid</div><div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>${Number(d.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>}
                               {d.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Notes</div><div style={{ fontSize: 12 }}>{d.notes}</div></div>}
                             </div>
                             {d.photo_url && (
@@ -1965,7 +1971,7 @@ function AppInner({ session }) {
 
   const blankDaily = () => ({ carId: cars[0]?.id || "", weekStart: getMondayStr(), weekEnd: getSundayStr(getMondayStr()), entryMode: "daily", totalKm: "", days: Array(7).fill(""), amount: "", paid: true, notes: "" });
   const blankCost = { carId: cars[0]?.id || "", date: today(), amount: "", category: "Service & Insurance", notes: "" };
-  const blankDoc = { carId: cars[0]?.id || "", type: DOC_TYPES[0], expiry: "", notes: "" };
+  const blankDoc = { carId: cars[0]?.id || "", type: DOC_TYPES[0], expiry: "", notes: "", amount: "" };
 
   const [wForm, setWForm] = useState(blankDaily);
   const [editingWeekId, setEditingWeekId] = useState(null);
@@ -2247,7 +2253,7 @@ function AppInner({ session }) {
 
   function startEditDoc(doc) {
     setEditingDocId(doc.id);
-    setDocForm({ carId: doc.car_id, type: doc.type, expiry: doc.expiry, notes: doc.notes || "", photoFile: null, photoPreview: doc.photo_url || null });
+    setDocForm({ carId: doc.car_id, type: doc.type, expiry: doc.expiry, notes: doc.notes || "", amount: doc.amount || "", photoFile: null, photoPreview: doc.photo_url || null });
     setShowDocForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -2274,7 +2280,7 @@ function AppInner({ session }) {
       }
     }
     if (editingDocId) {
-      const updates = { car_id: docForm.carId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, photo_url: photoUrl };
+      const updates = { car_id: docForm.carId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, amount: docForm.amount ? Number(docForm.amount) : null, photo_url: photoUrl };
       const { data, error } = await supabase.from("docs").update(updates).eq("id", editingDocId).select().single();
       if (!error) {
         setDocs(d => d.map(x => x.id === editingDocId ? data : x).sort((a, b) => new Date(a.expiry) - new Date(b.expiry)));
@@ -2282,7 +2288,7 @@ function AppInner({ session }) {
         cancelDocForm();
       } else toast_("Error saving");
     } else {
-      const row = { car_id: docForm.carId, user_id: userId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, photo_url: photoUrl };
+      const row = { car_id: docForm.carId, user_id: userId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, amount: docForm.amount ? Number(docForm.amount) : null, photo_url: photoUrl };
       const { data, error } = await supabase.from("docs").insert(row).select().single();
       if (!error) {
         setDocs(d => [...d, data].sort((a, b) => new Date(a.expiry) - new Date(b.expiry)));
