@@ -1687,33 +1687,83 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
             const current = entries[0];
             const history = entries.slice(1);
             const st = docStatus(current.expiry);
+            const fmtDate = d => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+            // compute start date from previous record's expiry or null
             return (
-              <div key={type} style={{ marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 8, background: C.faint, borderLeft: `3px solid ${st.color}` }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{type}</div>
-                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Expires: {new Date(current.expiry).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{current.notes ? ` · ${current.notes}` : ""}</div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.color + "18", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap" }}>{st.label}</span>
+              <div key={type} style={{ marginBottom: 10 }}>
+                {/* Current record row */}
+                <details style={{ borderRadius: 8, overflow: "hidden" }}>
+                  <summary style={{ listStyle: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: C.faint, borderLeft: `4px solid ${st.color}` }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{type}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                        Expires <span style={{ color: st.color, fontWeight: 600 }}>{fmtDate(current.expiry)}</span>
+                      </div>
+                    </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <button onClick={() => onStartEditDoc && onStartEditDoc(current)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }} title="Edit">✎</button>
-                      <button onClick={() => del("docs", current.id, setDocs)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }}>✕</button>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.color + "18", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap" }}>{st.label}</span>
+                      <span style={{ color: C.muted, fontSize: 12 }}>›</span>
+                    </div>
+                  </summary>
+                  {/* Expanded detail panel for current record */}
+                  <div style={{ background: C.bg, borderLeft: `4px solid ${st.color}`, padding: "14px 14px 10px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px", marginBottom: 12 }}>
+                      <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Type</div><div style={{ fontWeight: 600, fontSize: 13 }}>{type}</div></div>
+                      <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Status</div><div style={{ fontWeight: 700, fontSize: 13, color: st.color }}>{st.label}</div></div>
+                      <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Expiry Date</div><div style={{ fontWeight: 600, fontSize: 13 }}>{fmtDate(current.expiry)}</div></div>
+                      <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Vehicle</div><div style={{ fontWeight: 600, fontSize: 13, color: car.color }}>{car.name}</div></div>
+                      {current.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Notes / Policy No.</div><div style={{ fontWeight: 600, fontSize: 13 }}>{current.notes}</div></div>}
+                    </div>
+                    {current.photo_url && (
+                      <a href={current.photo_url} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: 12 }}>
+                        <img src={current.photo_url} alt="Licence disc" style={{ width: "100%", maxWidth: 260, borderRadius: 8, border: `1px solid ${C.border}`, display: "block" }} />
+                        <div style={{ fontSize: 10, color: C.cyan, marginTop: 4 }}>Tap to open full size ↗</div>
+                      </a>
+                    )}
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => onStartEditDoc && onStartEditDoc(current)} style={{ ...S.btn(), fontSize: 12, padding: "7px 14px" }}>✎ Edit</button>
+                      <button onClick={() => del("docs", current.id, setDocs)} style={{ ...S.btn(C.red), fontSize: 12, padding: "7px 14px" }}>Delete</button>
                     </div>
                   </div>
-                </div>
+                </details>
+
+                {/* History records */}
                 {history.length > 0 && (
-                  <details style={{ marginTop: 4, marginLeft: 12 }}>
-                    <summary style={{ fontSize: 11, color: C.muted, cursor: "pointer" }}>
-                      {history.length} older {type} record{history.length > 1 ? "s" : ""}
-                    </summary>
-                    {history.map(d => (
-                      <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", marginTop: 4, borderRadius: 6, background: C.bg, fontSize: 11, color: C.muted }}>
-                        <span>Expired: {new Date(d.expiry).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{d.notes ? ` · ${d.notes}` : ""}</span>
-                        <button onClick={() => del("docs", d.id, setDocs)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }}>✕</button>
-                      </div>
-                    ))}
-                  </details>
+                  <div style={{ marginTop: 4, marginLeft: 16, borderLeft: `2px solid ${C.border}`, paddingLeft: 12 }}>
+                    <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, marginTop: 4 }}>Previous records ({history.length})</div>
+                    {history.map((d, i) => {
+                      const hst = docStatus(d.expiry);
+                      const nextExpiry = i === 0 ? current.expiry : history[i - 1].expiry;
+                      return (
+                        <details key={d.id} style={{ marginBottom: 6 }}>
+                          <summary style={{ listStyle: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: C.faint, borderRadius: 7, borderLeft: `3px solid ${C.border}` }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>{fmtDate(d.expiry)}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>Ran until {fmtDate(d.expiry)}</div>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <span style={{ fontSize: 10, color: C.muted, background: C.border + "44", borderRadius: 4, padding: "2px 6px" }}>Expired</span>
+                              <span style={{ color: C.muted, fontSize: 11 }}>›</span>
+                            </div>
+                          </summary>
+                          <div style={{ background: C.bg, borderRadius: "0 0 7px 7px", padding: "12px 12px 10px", borderLeft: `3px solid ${C.border}` }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px", marginBottom: 10 }}>
+                              <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Expiry</div><div style={{ fontSize: 12, fontWeight: 600 }}>{fmtDate(d.expiry)}</div></div>
+                              <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Superseded by</div><div style={{ fontSize: 12, fontWeight: 600 }}>{fmtDate(nextExpiry)}</div></div>
+                              {d.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Notes</div><div style={{ fontSize: 12 }}>{d.notes}</div></div>}
+                            </div>
+                            {d.photo_url && (
+                              <a href={d.photo_url} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: 10 }}>
+                                <img src={d.photo_url} alt="Disc" style={{ width: "100%", maxWidth: 220, borderRadius: 7, border: `1px solid ${C.border}`, display: "block" }} />
+                                <div style={{ fontSize: 10, color: C.cyan, marginTop: 3 }}>Tap to open ↗</div>
+                              </a>
+                            )}
+                            <button onClick={() => del("docs", d.id, setDocs)} style={{ background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}>Delete record</button>
+                          </div>
+                        </details>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             );
