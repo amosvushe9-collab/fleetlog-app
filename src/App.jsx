@@ -2974,12 +2974,12 @@ function AppInner({ session }) {
   const cfg = getSectorCfg(sector);
 
   const nav = [
-    { id: "dashboard", label: "Dashboard" },
+    { id: "dashboard", label: "Home" },
     { id: "weekly", label: cfg.incomeTab },
     { id: "costs", label: "Costs" },
     { id: "cash", label: "Cash" },
-    { id: "compliance", label: "Comply" },
-    { id: "incidents", label: "Incidents" },
+    { id: "compliance", label: "Docs" },
+    { id: "incidents", label: "Issues" },
     { id: "cars", label: cfg.vehiclesLabel, icon: cfg.icon },
   ];
 
@@ -3001,13 +3001,13 @@ function AppInner({ session }) {
       </header>
 
       {/* Bottom tab bar — primary navigation */}
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface + "f0", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderTop: "1px solid " + C.border, display: "flex", zIndex: 99, height: 58, alignItems: "stretch" }}>
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface + "f0", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderTop: "1px solid " + C.border, display: "flex", zIndex: 99, height: 58, alignItems: "stretch", overflowX: "auto", overflowY: "hidden", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
         {nav.map(n => {
           const icons = { dashboard: "◈", weekly: "📅", costs: "💸", cash: "💵", compliance: "🛡️", incidents: "🔧" };
           const icon = n.icon || icons[n.id] || "●";
           const active = view === n.id;
           return (
-            <button key={n.id} onClick={() => setView(n.id)} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, color: active ? C.cyan : C.muted, transition: "color 0.15s", position: "relative" }}>
+            <button key={n.id} onClick={() => setView(n.id)} style={{ flex: "0 0 auto", minWidth: 56, background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, color: active ? C.cyan : C.muted, transition: "color 0.15s", position: "relative", padding: "0 4px" }}>
               {active && <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: 2, background: C.cyan, borderRadius: "0 0 3px 3px" }} />}
               <span style={{ fontSize: 16, lineHeight: 1 }}>{icon}</span>
               <span style={{ fontSize: 8, fontWeight: active ? 700 : 500, letterSpacing: "0.02em" }}>{n.label}</span>
