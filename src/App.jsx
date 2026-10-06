@@ -1038,7 +1038,7 @@ function Onboarding({ onComplete }) {
   );
 }
 
-function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView, sector }) {
+function Dashboard({ cars, weeks, costs, incidents, docs, movements, allAlerts, docAlerts, paymentAlerts, missingWeekAlerts, carName, setView, sector }) {
   const [selectedMonth, setSelectedMonth] = useState("all");
 
   // Build the list of months that actually have data, newest first, plus "All Time"
@@ -1266,6 +1266,27 @@ function Dashboard({ cars, weeks, costs, incidents, allAlerts, docAlerts, paymen
         <Stat label="Net Profit" value={fmt(totNet)} color={totNet >= 0 ? C.green : C.red} />
         <Stat label="Fleet km" value={fmtKm(totKm)} color={C.cyan} />
       </div>
+
+      {/* Cash Position Card — links to Cash tab */}
+      {(() => {
+        const totalIn    = weeks.filter(w => w.paid).reduce((s, w) => s + Number(w.amount || 0), 0);
+        const totalOut   = costs.reduce((s, c) => s + Number(c.amount || 0), 0)
+                         + (docs || []).reduce((s, d) => s + Number(d.amount || 0), 0)
+                         + incidents.reduce((s, i) => s + Number(i.repair_amount || i.quotation_amount || 0), 0);
+        const totalMoved = (movements || []).filter(m => !m.repaid).reduce((s, m) => s + Number(m.amount || 0), 0);
+        const cash = totalIn - totalOut - totalMoved;
+        const col  = cash >= 0 ? C.green : C.red;
+        return (
+          <div onClick={() => setView("cash")} style={{ ...S.card, marginBottom: 16, cursor: "pointer", borderColor: col + "44", background: col + "06", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>💵 Cash at Hand</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: col, fontFamily: "monospace" }}>{cash < 0 ? "-" : ""}{fmt(Math.abs(cash))}</div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{fmt(totalIn)} in · {fmt(totalOut)} out · {fmt(totalMoved)} moved</div>
+            </div>
+            <div style={{ color: C.muted, fontSize: 20 }}>›</div>
+          </div>
+        );
+      })()}
 
       {/* Insights Panel */}
       {insights.length > 0 && (
@@ -1890,7 +1911,153 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
   );
 }
 
-function Cars({
+// ── Cash Ledger ───────────────────────────────────────────────────────────────
+const MOVEMENT_TYPES = ["loan", "transfer", "withdrawal", "other"];
+const MOVEMENT_LABELS = { loan: "💰 Loan out", transfer: "🏦 Transfer", withdrawal: "💵 Withdrawal", other: "📦 Other" };
+
+function CashLedger({ weeks, costs, docs, incidents, movements, setMovements, syncing, setSyncing, userId, setView }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ date: today(), description: "", amount: "", type: "withdrawal", notes: "" });
+  const [saving, setSaving] = useState(false);
+
+  // ── Totals pulled from other tabs ──
+  const totalIn    = weeks.filter(w => w.paid).reduce((s, w) => s + Number(w.amount || 0), 0);
+  const totalCosts = costs.reduce((s, c) => s + Number(c.amount || 0), 0);
+  const totalDocs  = docs.reduce((s, d) => s + Number(d.amount || 0), 0);
+  const totalRepairs = incidents.reduce((s, i) => s + Number(i.repair_amount || i.quotation_amount || 0), 0);
+  const totalOut   = totalCosts + totalDocs + totalRepairs;
+
+  // Movements: outstanding loans count against balance until repaid
+  const totalMoved = movements.filter(m => !m.repaid).reduce((s, m) => s + Number(m.amount || 0), 0);
+  const cashAtHand = totalIn - totalOut - totalMoved;
+
+  // ── Unified transaction list ──
+  const transactions = useMemo(() => {
+    const list = [];
+    weeks.filter(w => w.paid).forEach(w => list.push({ date: w.week_start, label: "Week income", sub: "", amount: Number(w.amount || 0), dir: "in", color: C.green, source: "weekly" }));
+    costs.forEach(c => list.push({ date: c.date, label: c.category || "Cost", sub: c.notes || "", amount: -Number(c.amount || 0), dir: "out", color: C.red, source: "costs" }));
+    docs.filter(d => d.amount).forEach(d => list.push({ date: d.created_at?.slice(0, 10) || today(), label: d.type + " licence", sub: "", amount: -Number(d.amount), dir: "out", color: C.amber, source: "compliance" }));
+    incidents.filter(i => i.repair_amount || i.quotation_amount).forEach(i => list.push({ date: i.date, label: "Repair: " + (i.description || "incident"), sub: i.repair_shop || "", amount: -Number(i.repair_amount || i.quotation_amount), dir: "out", color: C.red, source: "incidents" }));
+    movements.forEach(m => list.push({ date: m.date, label: MOVEMENT_LABELS[m.type] + ": " + m.description, sub: m.repaid ? "✓ Repaid" + (m.repaid_date ? " " + m.repaid_date : "") : "Outstanding", amount: m.repaid ? 0 : -Number(m.amount), dir: "move", color: m.repaid ? C.green : C.amber, source: "movements", id: m.id, repaid: m.repaid }));
+    return list.sort((a, b) => b.date.localeCompare(a.date));
+  }, [weeks, costs, docs, incidents, movements]);
+
+  async function saveMovement() {
+    if (!form.description || !form.amount || !form.date) return;
+    setSaving(true);
+    const row = { user_id: userId, date: form.date, description: form.description, amount: Number(form.amount), type: form.type, notes: form.notes, repaid: false };
+    const { data, error } = await supabase.from("movements").insert(row).select().single();
+    if (!error) {
+      setMovements(m => [data, ...m]);
+      setForm({ date: today(), description: "", amount: "", type: "withdrawal", notes: "" });
+      setShowForm(false);
+    }
+    setSaving(false);
+  }
+
+  async function markRepaid(id) {
+    const { data, error } = await supabase.from("movements").update({ repaid: true, repaid_date: today() }).eq("id", id).select().single();
+    if (!error) setMovements(m => m.map(x => x.id === id ? data : x));
+  }
+
+  async function deleteMovement(id) {
+    const { error } = await supabase.from("movements").delete().eq("id", id);
+    if (!error) setMovements(m => m.filter(x => x.id !== id));
+  }
+
+  const balColor = cashAtHand >= 0 ? C.green : C.red;
+
+  return (
+    <div style={S.page}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div><div style={S.title}>💵 Cash Position</div><div style={S.sub}>Balance as of today</div></div>
+        <button style={S.btn()} onClick={() => setShowForm(v => !v)}>+ Log Movement</button>
+      </div>
+
+      {/* Big balance card */}
+      <div style={{ ...S.card, marginBottom: 16, textAlign: "center", borderColor: balColor + "44", background: balColor + "08" }}>
+        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>Cash at Hand</div>
+        <div style={{ fontSize: 40, fontWeight: 900, color: balColor, letterSpacing: -1, fontFamily: "monospace" }}>{cashAtHand < 0 ? "-" : ""}{fmt(Math.abs(cashAtHand))}</div>
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>All time · paid weeks only</div>
+      </div>
+
+      {/* Breakdown row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+        <div style={{ ...S.card, textAlign: "center", padding: "12px 8px" }}>
+          <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>Total In</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.green, fontFamily: "monospace" }}>{fmt(totalIn)}</div>
+        </div>
+        <div style={{ ...S.card, textAlign: "center", padding: "12px 8px" }}>
+          <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>Total Out</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.red, fontFamily: "monospace" }}>{fmt(totalOut)}</div>
+          <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>costs · docs · repairs</div>
+        </div>
+        <div style={{ ...S.card, textAlign: "center", padding: "12px 8px" }}>
+          <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>Moved Out</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.amber, fontFamily: "monospace" }}>{fmt(totalMoved)}</div>
+          <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>outstanding only</div>
+        </div>
+      </div>
+
+      {/* Movement form */}
+      {showForm && (
+        <div style={{ ...S.card, marginBottom: 16, borderColor: C.amber + "44" }}>
+          <div style={{ fontWeight: 700, color: C.amber, marginBottom: 14 }}>Log Money Movement</div>
+          <div style={{ ...S.row, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}><label style={S.label}>Date</label>
+              <input type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            </div>
+            <div style={{ flex: 1 }}><label style={S.label}>Type</label>
+              <select style={S.input} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                {MOVEMENT_TYPES.map(t => <option key={t} value={t}>{MOVEMENT_LABELS[t]}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}><label style={S.label}>Description</label>
+            <input style={S.input} placeholder={form.type === "loan" ? "Loaned to driver / person name" : form.type === "transfer" ? "Transferred to savings / account" : "What was this for?"} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+          <div style={{ ...S.row, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}><label style={S.label}>Amount (USD)</label>
+              <input type="number" min="0" step="0.01" style={S.input} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+            </div>
+            <div style={{ flex: 1 }}><label style={S.label}>Notes (optional)</label>
+              <input style={S.input} placeholder="e.g. due back 15 Nov" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+          </div>
+          <div style={S.row}>
+            <button style={S.btn(C.amber)} onClick={saveMovement} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+            <button style={S.ghost} onClick={() => setShowForm(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction feed */}
+      <div style={{ fontWeight: 700, fontSize: 13, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>All Transactions</div>
+      {transactions.length === 0 && <div style={{ ...S.card, color: C.muted, fontSize: 13 }}>No transactions yet. Start logging weekly income across your other tabs.</div>}
+      {transactions.map((tx, i) => (
+        <div key={i} style={{ ...S.card, marginBottom: 8, padding: "10px 14px", borderLeft: `3px solid ${tx.color}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tx.label}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{tx.date}{tx.sub ? " · " + tx.sub : ""}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginLeft: 10 }}>
+            <span style={{ fontWeight: 800, fontSize: 14, color: tx.dir === "in" ? C.green : tx.dir === "move" && tx.repaid ? C.muted : tx.color, fontFamily: "monospace", textDecoration: tx.dir === "move" && tx.repaid ? "line-through" : "none" }}>
+              {tx.dir === "in" ? "+" : tx.amount === 0 ? "" : "-"}{fmt(Math.abs(tx.amount))}
+            </span>
+            {tx.source === "movements" && !tx.repaid && (
+              <button onClick={() => markRepaid(tx.id)} style={{ fontSize: 10, color: C.green, background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>✓ Repaid</button>
+            )}
+            {tx.source === "movements" && (
+              <button onClick={() => deleteMovement(tx.id)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer", fontSize: 12 }}>✕</button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
   cars, weeks, carStats, showAddCar, setShowAddCar, newCar, setNewCar, syncing,
   onAddCar, editingOdoCarId, setEditingOdoCarId, odoForm, setOdoForm, onSaveOdometer, cfg,
 }) {
@@ -1959,6 +2126,7 @@ function AppInner({ session }) {
   const [docs, setDocs]   = useState([]);
   const [serviceRecords, setServiceRecords] = useState([]);
   const [incidents, setIncidents] = useState([]);
+  const [movements, setMovements] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -2004,13 +2172,14 @@ function AppInner({ session }) {
   useEffect(() => {
     async function fetchAll() {
       setLoading(true);
-      const [carsRes, weeksRes, costsRes, docsRes, serviceRes, incidentRes, profileRes] = await Promise.all([
+      const [carsRes, weeksRes, costsRes, docsRes, serviceRes, incidentRes, movementsRes, profileRes] = await Promise.all([
         supabase.from("cars").select("*").eq("user_id", userId).order("created_at"),
         supabase.from("weeks").select("*").eq("user_id", userId).order("week_start", { ascending: false }),
         supabase.from("costs").select("*").eq("user_id", userId).order("date", { ascending: false }),
         supabase.from("docs").select("*").eq("user_id", userId).order("expiry"),
         supabase.from("service_records").select("*").eq("user_id", userId).order("date", { ascending: false }),
         supabase.from("incidents").select("*").eq("user_id", userId).order("date", { ascending: false }),
+        supabase.from("movements").select("*").eq("user_id", userId).order("date", { ascending: false }),
         supabase.from("profiles").select("*").eq("id", userId).single(),
       ]);
       if (carsRes.data)  setCars(carsRes.data);
@@ -2019,6 +2188,7 @@ function AppInner({ session }) {
       if (docsRes.data)  setDocs(docsRes.data);
       if (serviceRes.data) setServiceRecords(serviceRes.data);
       if (incidentRes.data) setIncidents(incidentRes.data);
+      if (movementsRes.data) setMovements(movementsRes.data);
       if (profileRes.data) setProfile(profileRes.data);
       setLoading(false);
     }
@@ -2542,6 +2712,7 @@ function AppInner({ session }) {
     { id: "dashboard", label: "Dashboard" },
     { id: "weekly", label: cfg.incomeTab },
     { id: "costs", label: "Costs" },
+    { id: "cash", label: "Cash" },
     { id: "compliance", label: "Comply" },
     { id: "incidents", label: "Incidents" },
     { id: "cars", label: cfg.vehiclesLabel },
@@ -2567,21 +2738,21 @@ function AppInner({ session }) {
       {/* Bottom tab bar — primary navigation */}
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface + "f0", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderTop: "1px solid " + C.border, display: "flex", zIndex: 99, height: 58, alignItems: "stretch" }}>
         {nav.map(n => {
-          const icons = { dashboard: "◈", weekly: "📅", costs: "💸", compliance: "🛡️", incidents: "🔧", cars: "🚗", kombis: "🚌", trucks: "🚛", buses: "🏫" };
+          const icons = { dashboard: "◈", weekly: "📅", costs: "💸", cash: "💵", compliance: "🛡️", incidents: "🔧", cars: "🚗", kombis: "🚌", trucks: "🚛", buses: "🏫" };
           const icon = icons[n.id] || icons[n.label.toLowerCase()] || "●";
           const active = view === n.id;
           return (
             <button key={n.id} onClick={() => setView(n.id)} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, color: active ? C.cyan : C.muted, transition: "color 0.15s", position: "relative" }}>
               {active && <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: 2, background: C.cyan, borderRadius: "0 0 3px 3px" }} />}
               <span style={{ fontSize: 16, lineHeight: 1 }}>{icon}</span>
-              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: "0.04em" }}>{n.label}</span>
+              <span style={{ fontSize: 8, fontWeight: active ? 700 : 500, letterSpacing: "0.02em" }}>{n.label}</span>
             </button>
           );
         })}
       </nav>
 
       {view === "dashboard" && (
-        <Dashboard cars={cars} weeks={weeks} costs={costs} incidents={incidents} allAlerts={allAlerts} docAlerts={docAlerts} paymentAlerts={paymentAlerts} missingWeekAlerts={missingWeekAlerts} carName={carName} setView={setView} sector={sector} />
+        <Dashboard cars={cars} weeks={weeks} costs={costs} incidents={incidents} docs={docs} movements={movements} allAlerts={allAlerts} docAlerts={docAlerts} paymentAlerts={paymentAlerts} missingWeekAlerts={missingWeekAlerts} carName={carName} setView={setView} sector={sector} />
       )}
 
       {view === "weekly" && (
@@ -2606,6 +2777,15 @@ function AppInner({ session }) {
           editingCostId={editingCostId} setEditingCostId={setEditingCostId}
           syncing={syncing} blankCost={blankCost}
           onSaveCost={handleSaveCost} onCancelCostForm={cancelCostForm} onStartEditCost={startEditCost}
+        />
+      )}
+
+      {view === "cash" && (
+        <CashLedger
+          weeks={weeks} costs={costs} docs={docs} incidents={incidents}
+          movements={movements} setMovements={setMovements}
+          syncing={syncing} setSyncing={setSyncing}
+          userId={userId} setView={setView}
         />
       )}
 
