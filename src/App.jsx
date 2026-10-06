@@ -2112,6 +2112,154 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
   );
 }
 
+// ── Monthly Cash Flow ─────────────────────────────────────────────────────────
+function MonthlyCashFlow({ weeks, costs, docs, incidents, movements, markRepaid, deleteMovement }) {
+  const [expanded, setExpanded] = useState(null);
+
+  const months = useMemo(() => {
+    const map = {};
+
+    const ensure = key => {
+      if (!map[key]) map[key] = { key, in: 0, out: 0, moved: 0, incomeItems: [], costItems: [], movementItems: [] };
+    };
+
+    weeks.filter(w => w.paid).forEach(w => {
+      const k = monthKey(w.week_start);
+      ensure(k);
+      map[k].in += Number(w.amount || 0);
+      map[k].incomeItems.push({ label: w.notes ? w.notes.split(" · ")[0] : "Income", amount: Number(w.amount || 0) });
+    });
+
+    costs.forEach(c => {
+      const k = monthKey(c.date);
+      ensure(k);
+      map[k].out += Number(c.amount || 0);
+      map[k].costItems.push({ label: c.category || "Cost", amount: Number(c.amount || 0), notes: c.notes });
+    });
+
+    docs.filter(d => d.amount).forEach(d => {
+      const k = monthKey(d.created_at?.slice(0, 10) || today());
+      ensure(k);
+      map[k].out += Number(d.amount);
+      map[k].costItems.push({ label: d.type, amount: Number(d.amount), notes: "compliance" });
+    });
+
+    incidents.filter(i => i.repair_amount || i.quotation_amount).forEach(i => {
+      const k = monthKey(i.date);
+      ensure(k);
+      const amt = Number(i.repair_amount || i.quotation_amount);
+      map[k].out += amt;
+      map[k].costItems.push({ label: "Repair: " + (i.description || "incident"), amount: amt });
+    });
+
+    movements.forEach(m => {
+      const k = monthKey(m.date);
+      ensure(k);
+      if (!m.repaid) map[k].moved += Number(m.amount || 0);
+      map[k].movementItems.push(m);
+    });
+
+    return Object.values(map).sort((a, b) => b.key.localeCompare(a.key));
+  }, [weeks, costs, docs, incidents, movements]);
+
+  if (months.length === 0) return (
+    <div style={{ ...S.card, color: C.muted, fontSize: 13 }}>No data yet — income and costs will appear here by month.</div>
+  );
+
+  return (
+    <div>
+      {months.map(m => {
+        const net = m.in - m.out - m.moved;
+        const netColor = net >= 0 ? C.green : C.red;
+        const isOpen = expanded === m.key;
+        return (
+          <div key={m.key} style={{ ...S.card, marginBottom: 10, padding: 0, overflow: "hidden" }}>
+            {/* Month header — tap to expand */}
+            <div onClick={() => setExpanded(isOpen ? null : m.key)}
+              style={{ padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+              {/* Month label */}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{monthLabel(m.key)}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                  <span style={{ color: C.green }}>↑ {fmt(m.in)}</span>
+                  <span style={{ color: C.dim }}> · </span>
+                  <span style={{ color: C.red }}>↓ {fmt(m.out)}</span>
+                  {m.moved > 0 && <><span style={{ color: C.dim }}> · </span><span style={{ color: C.amber }}>⟳ {fmt(m.moved)}</span></>}
+                </div>
+              </div>
+              {/* Net */}
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: 900, fontSize: 18, color: netColor, fontFamily: "monospace", letterSpacing: -0.5 }}>
+                  {net >= 0 ? "+" : ""}{fmt(net)}
+                </div>
+                <div style={{ fontSize: 10, color: C.muted }}>net</div>
+              </div>
+              <div style={{ color: C.muted, fontSize: 12 }}>{isOpen ? "▲" : "▼"}</div>
+            </div>
+
+            {/* Expanded breakdown */}
+            {isOpen && (
+              <div style={{ borderTop: "1px solid " + C.border, padding: "12px 16px" }}>
+                {/* Income */}
+                {m.incomeItems.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>↑ Income</div>
+                    {m.incomeItems.map((item, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingBottom: 4, borderBottom: "1px solid " + C.border + "44", marginBottom: 4 }}>
+                        <span style={{ color: C.text }}>{item.label}</span>
+                        <span style={{ color: C.green, fontFamily: "monospace", fontWeight: 700 }}>{fmt(item.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Costs */}
+                {m.costItems.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: C.red, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>↓ Outgoings</div>
+                    {m.costItems.map((item, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingBottom: 4, borderBottom: "1px solid " + C.border + "44", marginBottom: 4 }}>
+                        <span style={{ color: C.text }}>{item.label}{item.notes ? <span style={{ color: C.muted }}> · {item.notes}</span> : ""}</span>
+                        <span style={{ color: C.red, fontFamily: "monospace", fontWeight: 700 }}>-{fmt(item.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Movements */}
+                {m.movementItems.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: C.amber, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>⟳ Movements</div>
+                    {m.movementItems.map((mv, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, paddingBottom: 6, borderBottom: "1px solid " + C.border + "44", marginBottom: 6 }}>
+                        <div>
+                          <div style={{ color: mv.repaid ? C.muted : C.text, textDecoration: mv.repaid ? "line-through" : "none" }}>{mv.description}</div>
+                          <div style={{ fontSize: 10, color: mv.repaid ? C.green : C.amber }}>{mv.repaid ? "✓ Repaid" : "Outstanding"}</div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ color: mv.repaid ? C.muted : C.amber, fontFamily: "monospace", fontWeight: 700, textDecoration: mv.repaid ? "line-through" : "none" }}>-{fmt(mv.amount)}</span>
+                          {!mv.repaid && <button onClick={() => markRepaid(mv.id)} style={{ fontSize: 10, color: C.green, background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>✓ Repaid</button>}
+                          <button onClick={() => deleteMovement(mv.id)} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 12 }}>✕</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Month net summary */}
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid " + C.border }}>
+                  <span style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>Month net</span>
+                  <span style={{ fontSize: 15, fontWeight: 900, color: netColor, fontFamily: "monospace" }}>{net >= 0 ? "+" : ""}{fmt(net)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Cash Ledger ───────────────────────────────────────────────────────────────
 const MOVEMENT_TYPES = ["loan", "transfer", "withdrawal", "other"];
 const MOVEMENT_LABELS = { loan: "💰 Loan out", transfer: "🏦 Transfer", withdrawal: "💵 Withdrawal", other: "📦 Other" };
@@ -2232,28 +2380,9 @@ function CashLedger({ weeks, costs, docs, incidents, movements, setMovements, sy
         </div>
       )}
 
-      {/* Transaction feed */}
-      <div style={{ fontWeight: 700, fontSize: 13, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>All Transactions</div>
-      {transactions.length === 0 && <div style={{ ...S.card, color: C.muted, fontSize: 13 }}>No transactions yet. Start logging weekly income across your other tabs.</div>}
-      {transactions.map((tx, i) => (
-        <div key={i} style={{ ...S.card, marginBottom: 8, padding: "10px 14px", borderLeft: `3px solid ${tx.color}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tx.label}</div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{tx.date}{tx.sub ? " · " + tx.sub : ""}</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginLeft: 10 }}>
-            <span style={{ fontWeight: 800, fontSize: 14, color: tx.dir === "in" ? C.green : tx.dir === "move" && tx.repaid ? C.muted : tx.color, fontFamily: "monospace", textDecoration: tx.dir === "move" && tx.repaid ? "line-through" : "none" }}>
-              {tx.dir === "in" ? "+" : tx.amount === 0 ? "" : "-"}{fmt(Math.abs(tx.amount))}
-            </span>
-            {tx.source === "movements" && !tx.repaid && (
-              <button onClick={() => markRepaid(tx.id)} style={{ fontSize: 10, color: C.green, background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>✓ Repaid</button>
-            )}
-            {tx.source === "movements" && (
-              <button onClick={() => deleteMovement(tx.id)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer", fontSize: 12 }}>✕</button>
-            )}
-          </div>
-        </div>
-      ))}
+      {/* Monthly flow cards */}
+      <div style={{ fontWeight: 700, fontSize: 13, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Monthly Flow</div>
+      <MonthlyCashFlow weeks={weeks} costs={costs} docs={docs} incidents={incidents} movements={movements} markRepaid={markRepaid} deleteMovement={deleteMovement} />
     </div>
   );
 }
