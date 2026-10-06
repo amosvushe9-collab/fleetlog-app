@@ -604,7 +604,8 @@ function CostForm({ cForm, setCForm, cars, editingCostId, syncing, onSave, onCan
   );
 }
 
-function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel, editingDocId }) {
+function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel, editingDocId, cfg }) {
+  const allDocTypes = [...DOC_TYPES.slice(0, -1), ...(cfg?.extraDocTypes || []), "Other"];
   const fileInputId = "doc-photo-gallery-" + form.carId;
   const cameraInputId = "doc-photo-camera-" + form.carId;
   function handlePhotoSelect(e) {
@@ -623,7 +624,7 @@ function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel, ed
         </div>
         <div style={{ flex: 1 }}><label style={S.label}>Type</label>
           <select style={S.input} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-            {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
+            {allDocTypes.map(t => <option key={t}>{t}</option>)}
           </select>
         </div>
       </div>
@@ -1430,6 +1431,125 @@ function DailyForm({ form, setForm, cars, cfg, syncing, editingId, onSave, onCan
   );
 }
 
+const LOAD_TYPES = ["General Cargo", "Bulk Grain", "Livestock", "Fuel / Tanker", "Building Materials", "Refrigerated Goods", "Container", "Mining Ore", "Other"];
+
+function TripForm({ form, setForm, cars, cfg, syncing, editingId, onSave, onCancel }) {
+  return (
+    <div style={{ ...S.card, maxWidth: 500, marginBottom: 20, borderColor: C.red + "55" }}>
+      <div style={{ fontWeight: 700, color: C.red, fontSize: 15, marginBottom: 14 }}>{editingId ? "Edit Trip" : "Log Trip"}</div>
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>{cfg.vehicleLabel}</label>
+          <select style={S.input} value={form.carId} onChange={e => setForm(f => ({ ...f, carId: e.target.value }))}>
+            {cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Date</label>
+          <input type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+        </div>
+      </div>
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Origin</label>
+          <input style={S.input} placeholder="e.g. Harare" value={form.origin || ""} onChange={e => setForm(f => ({ ...f, origin: e.target.value }))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Destination</label>
+          <input style={S.input} placeholder="e.g. Beira" value={form.destination || ""} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} />
+        </div>
+      </div>
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Load Type</label>
+          <select style={S.input} value={form.loadType || ""} onChange={e => setForm(f => ({ ...f, loadType: e.target.value }))}>
+            <option value="">Select load…</option>
+            {LOAD_TYPES.map(t => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Distance (km, optional)</label>
+          <input type="number" inputMode="numeric" style={S.input} placeholder="e.g. 580" value={form.km || ""} onChange={e => setForm(f => ({ ...f, km: e.target.value }))} />
+        </div>
+      </div>
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Trip Income ($)</label>
+          <input type="number" inputMode="numeric" style={{ ...S.input, fontSize: 18, fontWeight: 800, color: C.green }} placeholder="0.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Status</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button style={{ ...S.btn(form.paid ? C.green : C.faint), flex: 1, color: form.paid ? "#000" : C.muted }} onClick={() => setForm(f => ({ ...f, paid: true }))}>✓ Paid</button>
+            <button style={{ ...S.btn(!form.paid ? C.amber : C.faint), flex: 1, color: !form.paid ? "#000" : C.muted }} onClick={() => setForm(f => ({ ...f, paid: false }))}>Pending</button>
+          </div>
+        </div>
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={S.label}>Notes (optional)</label>
+        <input style={S.input} placeholder="client, delays, border notes…" value={form.notes || ""} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+      </div>
+      <div style={S.row}>
+        <button style={{ ...S.btn(C.red), flex: 1, color: "#fff" }} onClick={onSave} disabled={syncing}>{syncing ? "Saving..." : editingId ? "Update Trip" : "Save Trip"}</button>
+        <button style={S.ghost} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function ContractForm({ form, setForm, cars, cfg, syncing, editingId, onSave, onCancel }) {
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  return (
+    <div style={{ ...S.card, maxWidth: 500, marginBottom: 20, borderColor: C.green + "55" }}>
+      <div style={{ fontWeight: 700, color: C.green, fontSize: 15, marginBottom: 14 }}>{editingId ? "Edit Contract" : "Log Contract Payment"}</div>
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>{cfg.vehicleLabel}</label>
+          <select style={S.input} value={form.carId} onChange={e => setForm(f => ({ ...f, carId: e.target.value }))}>
+            {cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Month</label>
+          <input type="month" style={S.input} value={form.month || currentMonth} onChange={e => setForm(f => ({ ...f, month: e.target.value }))} />
+        </div>
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label style={S.label}>School Name</label>
+        <input style={S.input} placeholder="e.g. Mzilikazi Primary School" value={form.school || ""} onChange={e => setForm(f => ({ ...f, school: e.target.value }))} />
+      </div>
+      <div style={{ ...S.row, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Learners</label>
+          <input type="number" inputMode="numeric" style={S.input} placeholder="e.g. 24" value={form.learners || ""} onChange={e => setForm(f => ({ ...f, learners: e.target.value }))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Contract Amount ($)</label>
+          <input type="number" inputMode="numeric" style={{ ...S.input, fontSize: 18, fontWeight: 800, color: C.green }} placeholder="0.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+        </div>
+      </div>
+      <div style={{ ...S.row, marginBottom: 14 }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Status</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button style={{ ...S.btn(form.paid ? C.green : C.faint), flex: 1, color: form.paid ? "#000" : C.muted }} onClick={() => setForm(f => ({ ...f, paid: true }))}>✓ Paid</button>
+            <button style={{ ...S.btn(!form.paid ? C.amber : C.faint), flex: 1, color: !form.paid ? "#000" : C.muted }} onClick={() => setForm(f => ({ ...f, paid: false }))}>Pending</button>
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>Notes (optional)</label>
+          <input style={S.input} placeholder="partial, late payer…" value={form.notes || ""} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+        </div>
+      </div>
+      <div style={S.row}>
+        <button style={{ ...S.btn(C.green), flex: 1, color: "#000" }} onClick={onSave} disabled={syncing}>{syncing ? "Saving..." : editingId ? "Update Contract" : "Save Contract"}</button>
+        <button style={S.ghost} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 function Weekly({
   weeks, cars, filterCar, setFilterCar, carColor, carName, togglePaid, del, setWeeks,
   showW, setShowW, wForm, setWForm, editingWeekId, setEditingWeekId,
@@ -1437,10 +1557,14 @@ function Weekly({
   onSaveWeek, onCancelWeekForm, onStartEditWeek,
   cfg, sector,
   dailyForm, setDailyForm, editingDailyId, onSaveDaily, onCancelDaily,
+  tripForm, setTripForm, editingTripId, onSaveTrip, onCancelTrip,
+  contractForm, setContractForm, editingContractId, onSaveContract, onCancelContract,
 }) {
   const filtered = weeks.filter(w => filterCar === "all" || w.car_id === filterCar);
   const isKombi = sector === "kombi";
-  const accentColor = isKombi ? C.amber : C.cyan;
+  const isHaulage = sector === "haulage";
+  const isBus = sector === "schoolbus";
+  const accentColor = isKombi ? C.amber : isHaulage ? C.red : isBus ? C.green : C.cyan;
 
   return (
     <div style={S.page}>
@@ -1457,18 +1581,28 @@ function Weekly({
           <button style={S.btn(accentColor)} onClick={() => {
             if (isKombi && setDailyForm) {
               setDailyForm({ carId: cars[0]?.id || "", date: today(), route: "", amount: "", trips: "", paid: true, notes: "" });
+            } else if (isHaulage && setTripForm) {
+              setTripForm({ carId: cars[0]?.id || "", date: today(), origin: "", destination: "", loadType: "", km: "", amount: "", paid: true, notes: "" });
+            } else if (isBus && setContractForm) {
+              setContractForm({ carId: cars[0]?.id || "", month: today().slice(0,7), school: "", learners: "", amount: "", paid: true, notes: "" });
             } else {
               setEditingWeekId(null); setWForm(blankDaily());
             }
             setShowW(v => !v);
-          }}>+ Add {isKombi ? "Day" : "Week"}</button>
+          }}>+ Add {isKombi ? "Day" : isHaulage ? "Trip" : isBus ? "Contract" : "Week"}</button>
         </div>
       </div>
 
       {showW && isKombi && dailyForm && (
         <DailyForm form={dailyForm} setForm={setDailyForm} cars={cars} cfg={cfg || { vehicleLabel: "Car" }} syncing={syncing} editingId={editingDailyId} onSave={onSaveDaily} onCancel={onCancelDaily} />
       )}
-      {showW && !isKombi && (
+      {showW && isHaulage && tripForm && (
+        <TripForm form={tripForm} setForm={setTripForm} cars={cars} cfg={cfg || { vehicleLabel: "Truck" }} syncing={syncing} editingId={editingTripId} onSave={onSaveTrip} onCancel={onCancelTrip} />
+      )}
+      {showW && isBus && contractForm && (
+        <ContractForm form={contractForm} setForm={setContractForm} cars={cars} cfg={cfg || { vehicleLabel: "Bus" }} syncing={syncing} editingId={editingContractId} onSave={onSaveContract} onCancel={onCancelContract} />
+      )}
+      {showW && !isKombi && !isHaulage && !isBus && (
         <WeekForm
           wForm={wForm} setWForm={setWForm} cars={cars}
           editingWeekId={editingWeekId} activeDay={activeDay} setActiveDay={setActiveDay}
@@ -1480,13 +1614,84 @@ function Weekly({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
-              <th style={S.th}>Week</th><th style={S.th}>Car</th><th style={S.th}>Mileage</th>
-              <th style={S.th}>Payment</th><th style={S.th}>$/km</th><th style={S.th}>Status</th>
-              <th style={S.th}>Notes</th><th style={S.th}></th>
+              {isKombi ? (
+                <><th style={S.th}>Date</th><th style={S.th}>{cfg?.vehicleLabel||"Kombi"}</th><th style={S.th}>Route</th><th style={S.th}>Trips</th><th style={S.th}>Takings</th><th style={S.th}>Status</th><th style={S.th}></th></>
+              ) : isHaulage ? (
+                <><th style={S.th}>Date</th><th style={S.th}>{cfg?.vehicleLabel||"Truck"}</th><th style={S.th}>Route</th><th style={S.th}>Load</th><th style={S.th}>Distance</th><th style={S.th}>Income</th><th style={S.th}>Status</th><th style={S.th}></th></>
+              ) : isBus ? (
+                <><th style={S.th}>Month</th><th style={S.th}>{cfg?.vehicleLabel||"Bus"}</th><th style={S.th}>School</th><th style={S.th}>Learners</th><th style={S.th}>Amount</th><th style={S.th}>Status</th><th style={S.th}></th></>
+              ) : (
+                <><th style={S.th}>Week</th><th style={S.th}>Car</th><th style={S.th}>Mileage</th><th style={S.th}>Payment</th><th style={S.th}>$/km</th><th style={S.th}>Status</th><th style={S.th}>Notes</th><th style={S.th}></th></>
+              )}
             </tr>
           </thead>
           <tbody>
             {filtered.map(w => {
+              // Parse notes for kombi/haulage/bus (route, trips, origin→dest, load stored in notes)
+              const notesParts = (w.notes || "").split(" · ");
+              const paidBtn = (
+                <button onClick={() => togglePaid(w.id, w.paid)} style={{ background: w.paid ? C.green + "22" : C.amber + "22", color: w.paid ? C.green : C.amber, border: "none", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  {w.paid ? "✓ Paid" : "Pending"}
+                </button>
+              );
+              const editDelBtns = (
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => onStartEditWeek(w)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }} title="Edit">✎</button>
+                  <button onClick={() => del("weeks", w.id, setWeeks)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }} title="Delete">✕</button>
+                </div>
+              );
+              if (isKombi) {
+                const route = notesParts[0] || "—";
+                const trips = notesParts.find(p => p.includes("trips")) || "—";
+                return (
+                  <tr key={w.id} onMouseEnter={e => e.currentTarget.style.background = C.faint} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <td style={{ ...S.td, color: "#f8fafc", fontWeight: 600 }}>{w.week_start}</td>
+                    <td style={S.td}><span style={{ color: carColor(w.car_id), fontWeight: 600 }}>{carName(w.car_id)}</span></td>
+                    <td style={{ ...S.td, color: C.muted }}>{route}</td>
+                    <td style={{ ...S.td, color: C.muted }}>{trips}</td>
+                    <td style={{ ...S.td, fontFamily: "monospace", color: C.green, fontWeight: 700 }}>{fmt(w.amount)}</td>
+                    <td style={S.td}>{paidBtn}</td>
+                    <td style={S.td}>{editDelBtns}</td>
+                  </tr>
+                );
+              }
+              if (isHaulage) {
+                // notes format: "Origin → Dest · LoadType · Xkm · notes"
+                const routePart = notesParts[0] || "—";
+                const loadPart = notesParts[1] || "—";
+                const distPart = notesParts[2] || "";
+                const kmNum = Number((distPart.match(/\d+/) || [])[0] || 0);
+                return (
+                  <tr key={w.id} onMouseEnter={e => e.currentTarget.style.background = C.faint} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <td style={{ ...S.td, color: "#f8fafc", fontWeight: 600 }}>{w.week_start}</td>
+                    <td style={S.td}><span style={{ color: carColor(w.car_id), fontWeight: 600 }}>{carName(w.car_id)}</span></td>
+                    <td style={{ ...S.td, color: C.muted, maxWidth: 140 }}>{routePart}</td>
+                    <td style={{ ...S.td, color: C.muted }}>{loadPart}</td>
+                    <td style={{ ...S.td, fontFamily: "monospace", color: C.cyan }}>{kmNum > 0 ? fmtKm(kmNum) : "—"}</td>
+                    <td style={{ ...S.td, fontFamily: "monospace", color: C.green, fontWeight: 700 }}>{fmt(w.amount)}</td>
+                    <td style={S.td}>{paidBtn}</td>
+                    <td style={S.td}>{editDelBtns}</td>
+                  </tr>
+                );
+              }
+              if (isBus) {
+                // notes format: "SchoolName · Xlearners · notes"
+                const school = notesParts[0] || "—";
+                const learnersStr = notesParts[1] || "";
+                const month = w.week_start ? w.week_start.slice(0, 7) : "—";
+                return (
+                  <tr key={w.id} onMouseEnter={e => e.currentTarget.style.background = C.faint} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <td style={{ ...S.td, color: "#f8fafc", fontWeight: 600 }}>{month}</td>
+                    <td style={S.td}><span style={{ color: carColor(w.car_id), fontWeight: 600 }}>{carName(w.car_id)}</span></td>
+                    <td style={{ ...S.td, color: C.muted }}>{school}</td>
+                    <td style={{ ...S.td, color: C.muted }}>{learnersStr || "—"}</td>
+                    <td style={{ ...S.td, fontFamily: "monospace", color: C.green, fontWeight: 700 }}>{fmt(w.amount)}</td>
+                    <td style={S.td}>{paidBtn}</td>
+                    <td style={S.td}>{editDelBtns}</td>
+                  </tr>
+                );
+              }
+              // Default: ride-hailing
               const pk = w.km > 0 ? w.amount / w.km : 0;
               return (
                 <tr key={w.id} onMouseEnter={e => e.currentTarget.style.background = C.faint} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -1495,18 +1700,9 @@ function Weekly({
                   <td style={{ ...S.td, fontFamily: "monospace", color: C.cyan }}>{fmtKm(w.km)}</td>
                   <td style={{ ...S.td, fontFamily: "monospace", color: C.green, fontWeight: 700 }}>{fmt(w.amount)}</td>
                   <td style={{ ...S.td, fontFamily: "monospace", color: C.amber }}>{pk > 0 ? fmtRate(pk) : "—"}</td>
-                  <td style={S.td}>
-                    <button onClick={() => togglePaid(w.id, w.paid)} style={{ background: w.paid ? C.green + "22" : C.amber + "22", color: w.paid ? C.green : C.amber, border: "none", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                      {w.paid ? "✓ Paid" : "Pending"}
-                    </button>
-                  </td>
+                  <td style={S.td}>{paidBtn}</td>
                   <td style={{ ...S.td, color: C.muted, maxWidth: 140 }}>{w.notes}</td>
-                  <td style={S.td}>
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <button onClick={() => onStartEditWeek(w)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }} title="Edit">✎</button>
-                      <button onClick={() => del("weeks", w.id, setWeeks)} style={{ background: "none", border: "none", color: C.border, cursor: "pointer" }} title="Delete">✕</button>
-                    </div>
-                  </td>
+                  <td style={S.td}>{editDelBtns}</td>
                 </tr>
               );
             })}
@@ -1514,14 +1710,19 @@ function Weekly({
           {filtered.length > 0 && (() => {
             const tk = filtered.reduce((s, w) => s + Number(w.km), 0);
             const ta = filtered.filter(w => w.paid).reduce((s, w) => s + Number(w.amount), 0);
+            const colSpanExtra = isHaulage ? 8 : (isKombi || isBus) ? 7 : 8;
             return (
               <tfoot>
                 <tr style={{ background: C.faint }}>
-                  <td style={{ ...S.td, fontWeight: 700 }} colSpan={2}>Totals ({filtered.length} weeks)</td>
-                  <td style={{ ...S.td, fontFamily: "monospace", color: C.cyan, fontWeight: 700 }}>{fmtKm(tk)}</td>
+                  <td style={{ ...S.td, fontWeight: 700 }} colSpan={2}>
+                    Totals ({filtered.length} {isKombi ? "days" : isHaulage ? "trips" : isBus ? "contracts" : "weeks"})
+                  </td>
+                  {isHaulage && <td style={{ ...S.td }} colSpan={2} />}
+                  {(isKombi || isBus) && <td style={{ ...S.td }} colSpan={2} />}
+                  {!isKombi && !isBus && !isHaulage && <td style={{ ...S.td, fontFamily: "monospace", color: C.cyan, fontWeight: 700 }}>{fmtKm(tk)}</td>}
                   <td style={{ ...S.td, fontFamily: "monospace", color: C.green, fontWeight: 700 }}>{fmt(ta)}</td>
-                  <td style={{ ...S.td, fontFamily: "monospace", color: C.amber, fontWeight: 700 }}>{tk > 0 ? fmtRate(ta / tk) : "—"}</td>
-                  <td colSpan={3} />
+                  {!isKombi && !isBus && !isHaulage && <td style={{ ...S.td, fontFamily: "monospace", color: C.amber, fontWeight: 700 }}>{tk > 0 ? fmtRate(ta / tk) : "—"}</td>}
+                  <td colSpan={isHaulage ? 2 : 2} />
                 </tr>
               </tfoot>
             );
@@ -1679,7 +1880,7 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
   editingDocId, onStartEditDoc,
   incidents, setIncidents, incidentForm, setIncidentForm, showIncidentForm, setShowIncidentForm,
   onSaveIncident, updateIncidentStatus, carName, carColor, onStartEditIncident, editingIncidentId,
-  hideIncidents, hideCompliance }) {
+  hideIncidents, hideCompliance, cfg }) {
   const grouped = cars.map(car => {
     const carDocs = docs.filter(d => d.car_id === car.id);
     // Group by document type, sort each group newest-expiry-first so [0] is always "current"
@@ -1701,7 +1902,7 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
       </div>
 
       {showForm && (
-        <DocForm form={form} setForm={setForm} cars={cars} syncing={syncing} uploading={uploading} onSave={onSaveDoc} onCancel={onCancelDoc || (() => setShowForm(false))} editingDocId={editingDocId} />
+        <DocForm form={form} setForm={setForm} cars={cars} syncing={syncing} uploading={uploading} onSave={onSaveDoc} onCancel={onCancelDoc || (() => setShowForm(false))} editingDocId={editingDocId} cfg={cfg} />
       )}
 
       {grouped.map(({ car, byType }) => (
@@ -2163,6 +2364,10 @@ function AppInner({ session }) {
   // Kombi daily takings form
   const [dailyForm, setDailyForm] = useState({ carId: "", date: today(), route: "", amount: "", trips: "", paid: true, notes: "" });
   const [editingDailyId, setEditingDailyId] = useState(null);
+  const [tripForm, setTripForm] = useState({ carId: "", date: today(), origin: "", destination: "", loadType: "", km: "", amount: "", paid: true, notes: "" });
+  const [editingTripId, setEditingTripId] = useState(null);
+  const [contractForm, setContractForm] = useState({ carId: "", month: today().slice(0,7), school: "", learners: "", amount: "", paid: true, notes: "" });
+  const [editingContractId, setEditingContractId] = useState(null);
 
   function toast_(m) { setToast(m); setTimeout(() => setToast(""), 2500); }
   const carColor = (id) => cars.find(c => c.id === id)?.color || C.muted;
@@ -2351,6 +2556,66 @@ function AppInner({ session }) {
       else toast_("Error saving");
     }
     setSyncing(false);
+  }
+
+  async function handleSaveTrip() {
+    if (!tripForm.carId || !tripForm.date || !tripForm.amount) {
+      toast_("Please select a vehicle, date, and enter income"); return;
+    }
+    setSyncing(true);
+    const notes = [
+      tripForm.origin && tripForm.destination ? tripForm.origin + " → " + tripForm.destination : (tripForm.origin || tripForm.destination || ""),
+      tripForm.loadType,
+      tripForm.km ? tripForm.km + " km" : "",
+      tripForm.notes,
+    ].filter(Boolean).join(" · ");
+    const base = { car_id: tripForm.carId, week_start: tripForm.date, week_end: tripForm.date, km: Number(tripForm.km) || 0, daily_km: null, amount: Number(tripForm.amount), paid: tripForm.paid, notes };
+    if (editingTripId) {
+      const { data, error } = await supabase.from("weeks").update(base).eq("id", editingTripId).select().single();
+      if (!error) { setWeeks(w => w.map(x => x.id === editingTripId ? data : x)); toast_("✓ Trip updated"); setShowW(false); setEditingTripId(null); }
+      else toast_("Error saving");
+    } else {
+      const { data, error } = await supabase.from("weeks").insert({ ...base, user_id: userId }).select().single();
+      if (!error) { setWeeks(w => [data, ...w]); toast_("✓ Trip logged — " + fmt(Number(tripForm.amount))); setShowW(false); setTripForm({ carId: cars[0]?.id || "", date: today(), origin: "", destination: "", loadType: "", km: "", amount: "", paid: true, notes: "" }); }
+      else toast_("Error saving");
+    }
+    setSyncing(false);
+  }
+
+  function startEditTrip(w) {
+    const parts = (w.notes || "").split(" · ");
+    const routePart = parts[0] || "";
+    const [origin, destination] = routePart.includes(" → ") ? routePart.split(" → ") : [routePart, ""];
+    setEditingTripId(w.id);
+    setTripForm({ carId: w.car_id, date: w.week_start, origin, destination, loadType: parts[1] || "", km: w.km > 0 ? String(w.km) : "", amount: String(w.amount), paid: w.paid, notes: parts.slice(3).join(" · ") });
+    setShowW(true); window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleSaveContract() {
+    if (!contractForm.carId || !contractForm.month || !contractForm.amount) {
+      toast_("Please select a vehicle, month, and enter amount"); return;
+    }
+    setSyncing(true);
+    const notes = [contractForm.school, contractForm.learners ? contractForm.learners + " learners" : "", contractForm.notes].filter(Boolean).join(" · ");
+    const dateStr = contractForm.month + "-01";
+    const base = { car_id: contractForm.carId, week_start: dateStr, week_end: dateStr, km: 0, daily_km: null, amount: Number(contractForm.amount), paid: contractForm.paid, notes };
+    if (editingContractId) {
+      const { data, error } = await supabase.from("weeks").update(base).eq("id", editingContractId).select().single();
+      if (!error) { setWeeks(w => w.map(x => x.id === editingContractId ? data : x)); toast_("✓ Contract updated"); setShowW(false); setEditingContractId(null); }
+      else toast_("Error saving");
+    } else {
+      const { data, error } = await supabase.from("weeks").insert({ ...base, user_id: userId }).select().single();
+      if (!error) { setWeeks(w => [data, ...w]); toast_("✓ Contract logged — " + fmt(Number(contractForm.amount))); setShowW(false); setContractForm({ carId: cars[0]?.id || "", month: today().slice(0,7), school: "", learners: "", amount: "", paid: true, notes: "" }); }
+      else toast_("Error saving");
+    }
+    setSyncing(false);
+  }
+
+  function startEditContract(w) {
+    const parts = (w.notes || "").split(" · ");
+    setEditingContractId(w.id);
+    setContractForm({ carId: w.car_id, month: w.week_start.slice(0, 7), school: parts[0] || "", learners: (parts[1] || "").replace(" learners", ""), amount: String(w.amount), paid: w.paid, notes: parts.slice(2).join(" · ") });
+    setShowW(true); window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handleSaveCost() {
@@ -2715,7 +2980,7 @@ function AppInner({ session }) {
     { id: "cash", label: "Cash" },
     { id: "compliance", label: "Comply" },
     { id: "incidents", label: "Incidents" },
-    { id: "cars", label: cfg.vehiclesLabel },
+    { id: "cars", label: cfg.vehiclesLabel, icon: cfg.icon },
   ];
 
   return (
@@ -2738,8 +3003,8 @@ function AppInner({ session }) {
       {/* Bottom tab bar — primary navigation */}
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface + "f0", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderTop: "1px solid " + C.border, display: "flex", zIndex: 99, height: 58, alignItems: "stretch" }}>
         {nav.map(n => {
-          const icons = { dashboard: "◈", weekly: "📅", costs: "💸", cash: "💵", compliance: "🛡️", incidents: "🔧", cars: "🚗", kombis: "🚌", trucks: "🚛", buses: "🏫" };
-          const icon = icons[n.id] || icons[n.label.toLowerCase()] || "●";
+          const icons = { dashboard: "◈", weekly: "📅", costs: "💸", cash: "💵", compliance: "🛡️", incidents: "🔧" };
+          const icon = n.icon || icons[n.id] || "●";
           const active = view === n.id;
           return (
             <button key={n.id} onClick={() => setView(n.id)} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, color: active ? C.cyan : C.muted, transition: "color 0.15s", position: "relative" }}>
@@ -2762,10 +3027,15 @@ function AppInner({ session }) {
           showW={showW} setShowW={setShowW} wForm={wForm} setWForm={setWForm}
           editingWeekId={editingWeekId} setEditingWeekId={setEditingWeekId}
           activeDay={activeDay} setActiveDay={setActiveDay} syncing={syncing} blankDaily={blankDaily}
-          onSaveWeek={handleSaveWeek} onCancelWeekForm={cancelWeekForm} onStartEditWeek={startEditWeek}
+          onSaveWeek={handleSaveWeek} onCancelWeekForm={cancelWeekForm}
+          onStartEditWeek={sector === "haulage" ? startEditTrip : sector === "schoolbus" ? startEditContract : startEditWeek}
           cfg={cfg} sector={sector}
           dailyForm={dailyForm} setDailyForm={setDailyForm} editingDailyId={editingDailyId}
           onSaveDaily={handleSaveDaily} onCancelDaily={() => { setShowW(false); setEditingDailyId(null); }}
+          tripForm={tripForm} setTripForm={setTripForm} editingTripId={editingTripId}
+          onSaveTrip={handleSaveTrip} onCancelTrip={() => { setShowW(false); setEditingTripId(null); }}
+          contractForm={contractForm} setContractForm={setContractForm} editingContractId={editingContractId}
+          onSaveContract={handleSaveContract} onCancelContract={() => { setShowW(false); setEditingContractId(null); }}
         />
       )}
 
@@ -2802,6 +3072,7 @@ function AppInner({ session }) {
           onSaveIncident={handleSaveIncident} updateIncidentStatus={updateIncidentStatus}
           onStartEditIncident={startEditIncident} editingIncidentId={editingIncidentId}
           carName={carName} carColor={carColor}
+          cfg={cfg}
           hideIncidents
         />
       )}
