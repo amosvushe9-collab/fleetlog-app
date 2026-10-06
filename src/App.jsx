@@ -2259,7 +2259,7 @@ function CashLedger({ weeks, costs, docs, incidents, movements, setMovements, sy
 }
 
 
-  cars, weeks, carStats, showAddCar, setShowAddCar, newCar, setNewCar, syncing,
+function Cars({ cars, weeks, carStats, showAddCar, setShowAddCar, newCar, setNewCar, syncing,
   onAddCar, editingOdoCarId, setEditingOdoCarId, odoForm, setOdoForm, onSaveOdometer, cfg,
 }) {
   return (
