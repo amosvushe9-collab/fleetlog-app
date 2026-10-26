@@ -1271,6 +1271,68 @@ function Dashboard({ cars, weeks, costs, incidents, docs, movements, allAlerts, 
         </div>
       )}
 
+      {/* Insurance Cost Summary */}
+      {(() => {
+        const insuranceDocs = docs.filter(d => d.type && d.type.includes("Insurance"));
+        if (insuranceDocs.length === 0) return null;
+        const insCarStats = cars.map(car => {
+          const carIns = insuranceDocs
+            .filter(d => d.car_id === car.id)
+            .sort((a, b) => new Date(b.expiry) - new Date(a.expiry));
+          const current = carIns[0];
+          if (!current) return null;
+          const startD = current.start_date ? new Date(current.start_date) : null;
+          const expiryD = new Date(current.expiry);
+          const today_ = new Date();
+          const weeksInTerm = startD ? Math.round((expiryD - startD) / (7 * 24 * 3600 * 1000)) : null;
+          const weeksPassed = startD ? Math.max(0, Math.round((Math.min(today_, expiryD) - startD) / (7 * 24 * 3600 * 1000))) : null;
+          const weeksRemaining = weeksInTerm && weeksPassed != null ? Math.max(0, weeksInTerm - weeksPassed) : null;
+          const costPerWeek = (weeksInTerm && current.amount) ? (Number(current.amount) / weeksInTerm) : null;
+          const pctUsed = (weeksInTerm && weeksPassed != null) ? Math.min(1, weeksPassed / weeksInTerm) : null;
+          const isExpired = expiryD < today_;
+          const fmtD = d => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          return { car, current, startD, expiryD, weeksInTerm, weeksPassed, weeksRemaining, costPerWeek, pctUsed, isExpired, fmtD };
+        }).filter(Boolean);
+        if (insCarStats.length === 0) return null;
+        return (
+          <div style={{ ...S.card, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>🛡️</span><span>Insurance Cost Summary</span>
+              <span style={{ fontSize: 10, color: C.muted, marginLeft: "auto" }}>Current term per vehicle</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {insCarStats.map(({ car, current, startD, expiryD, weeksInTerm, weeksPassed, weeksRemaining, costPerWeek, pctUsed, isExpired, fmtD }) => (
+                <div key={car.id} style={{ borderLeft: `3px solid ${car.color}`, paddingLeft: 12 }}>
+                  <div style={{ fontWeight: 700, color: car.color, fontSize: 13, marginBottom: 6 }}>{car.name}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "6px 14px", marginBottom: 8, fontSize: 12 }}>
+                    {startD && <div><span style={{ color: C.muted }}>Term: </span><span style={{ fontWeight: 600 }}>{fmtD(startD)} → {fmtD(expiryD)}</span></div>}
+                    {!startD && <div><span style={{ color: C.muted }}>Expires: </span><span style={{ fontWeight: 600 }}>{fmtD(expiryD)}</span></div>}
+                    {current.insurer && <div><span style={{ color: C.muted }}>Insurer: </span><span style={{ fontWeight: 600 }}>{current.insurer}</span></div>}
+                    {current.amount != null && <div><span style={{ color: C.muted }}>Premium: </span><span style={{ fontWeight: 700, color: C.green }}>${Number(current.amount).toFixed(2)}</span></div>}
+                    {weeksInTerm && <div><span style={{ color: C.muted }}>Total weeks: </span><span style={{ fontWeight: 600 }}>{weeksInTerm} wks</span></div>}
+                    {costPerWeek && <div><span style={{ color: C.muted }}>Cost/week: </span><span style={{ fontWeight: 700, color: C.amber }}>${costPerWeek.toFixed(2)}/wk</span></div>}
+                    {weeksPassed != null && !isExpired && <div><span style={{ color: C.muted }}>Weeks used: </span><span style={{ fontWeight: 600 }}>{weeksPassed} wks</span></div>}
+                    {weeksRemaining != null && !isExpired && <div><span style={{ color: C.muted }}>Weeks left: </span><span style={{ fontWeight: 600, color: weeksRemaining <= 4 ? C.red : weeksRemaining <= 8 ? C.amber : C.green }}>{weeksRemaining} wks</span></div>}
+                  </div>
+                  {pctUsed != null && !isExpired && (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.muted, marginBottom: 3 }}>
+                        <span>Term progress</span><span>{Math.round(pctUsed * 100)}% used</span>
+                      </div>
+                      <div style={{ height: 6, background: C.border, borderRadius: 99 }}>
+                        <div style={{ height: 6, borderRadius: 99, width: `${pctUsed * 100}%`, background: pctUsed > 0.85 ? C.red : pctUsed > 0.6 ? C.amber : car.color }} />
+                      </div>
+                    </div>
+                  )}
+                  {isExpired && <div style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>⚠ This term has expired</div>}
+                  {current.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Policy: {current.notes}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <Stat label="Total Received" value={fmt(totRec)} color={C.green} />
         <Stat label="Total Costs" value={fmt(totCost)} color={C.red} />
@@ -1380,68 +1442,6 @@ function Dashboard({ cars, weeks, costs, incidents, docs, movements, allAlerts, 
           </div>
         </div>
       )}
-
-      {/* Insurance Cost Summary */}
-      {(() => {
-        const insuranceDocs = docs.filter(d => d.type && d.type.includes("Insurance"));
-        if (insuranceDocs.length === 0) return null;
-        const insCarStats = cars.map(car => {
-          const carIns = insuranceDocs
-            .filter(d => d.car_id === car.id)
-            .sort((a, b) => new Date(b.expiry) - new Date(a.expiry));
-          const current = carIns[0];
-          if (!current) return null;
-          const startD = current.start_date ? new Date(current.start_date) : null;
-          const expiryD = new Date(current.expiry);
-          const today_ = new Date();
-          const weeksInTerm = startD ? Math.round((expiryD - startD) / (7 * 24 * 3600 * 1000)) : null;
-          const weeksPassed = startD ? Math.max(0, Math.round((Math.min(today_, expiryD) - startD) / (7 * 24 * 3600 * 1000))) : null;
-          const weeksRemaining = weeksInTerm && weeksPassed != null ? Math.max(0, weeksInTerm - weeksPassed) : null;
-          const costPerWeek = (weeksInTerm && current.amount) ? (Number(current.amount) / weeksInTerm) : null;
-          const pctUsed = (weeksInTerm && weeksPassed != null) ? Math.min(1, weeksPassed / weeksInTerm) : null;
-          const isExpired = expiryD < today_;
-          const fmtD = d => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-          return { car, current, startD, expiryD, weeksInTerm, weeksPassed, weeksRemaining, costPerWeek, pctUsed, isExpired, fmtD };
-        }).filter(Boolean);
-        if (insCarStats.length === 0) return null;
-        return (
-          <div style={{ ...S.card, marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-              <span>🛡️</span><span>Insurance Cost Summary</span>
-              <span style={{ fontSize: 10, color: C.muted, marginLeft: "auto" }}>Current term per vehicle</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {insCarStats.map(({ car, current, startD, expiryD, weeksInTerm, weeksPassed, weeksRemaining, costPerWeek, pctUsed, isExpired, fmtD }) => (
-                <div key={car.id} style={{ borderLeft: `3px solid ${car.color}`, paddingLeft: 12 }}>
-                  <div style={{ fontWeight: 700, color: car.color, fontSize: 13, marginBottom: 6 }}>{car.name}</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "6px 14px", marginBottom: 8, fontSize: 12 }}>
-                    {startD && <div><span style={{ color: C.muted }}>Term: </span><span style={{ fontWeight: 600 }}>{fmtD(startD)} → {fmtD(expiryD)}</span></div>}
-                    {!startD && <div><span style={{ color: C.muted }}>Expires: </span><span style={{ fontWeight: 600 }}>{fmtD(expiryD)}</span></div>}
-                    {current.insurer && <div><span style={{ color: C.muted }}>Insurer: </span><span style={{ fontWeight: 600 }}>{current.insurer}</span></div>}
-                    {current.amount != null && <div><span style={{ color: C.muted }}>Premium: </span><span style={{ fontWeight: 700, color: C.green }}>${Number(current.amount).toFixed(2)}</span></div>}
-                    {weeksInTerm && <div><span style={{ color: C.muted }}>Total weeks: </span><span style={{ fontWeight: 600 }}>{weeksInTerm} wks</span></div>}
-                    {costPerWeek && <div><span style={{ color: C.muted }}>Cost/week: </span><span style={{ fontWeight: 700, color: C.amber }}>${costPerWeek.toFixed(2)}/wk</span></div>}
-                    {weeksPassed != null && !isExpired && <div><span style={{ color: C.muted }}>Weeks used: </span><span style={{ fontWeight: 600 }}>{weeksPassed} wks</span></div>}
-                    {weeksRemaining != null && !isExpired && <div><span style={{ color: C.muted }}>Weeks left: </span><span style={{ fontWeight: 600, color: weeksRemaining <= 4 ? C.red : weeksRemaining <= 8 ? C.amber : C.green }}>{weeksRemaining} wks</span></div>}
-                  </div>
-                  {pctUsed != null && !isExpired && (
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.muted, marginBottom: 3 }}>
-                        <span>Term progress</span><span>{Math.round(pctUsed * 100)}% used</span>
-                      </div>
-                      <div style={{ height: 6, background: C.border, borderRadius: 99 }}>
-                        <div style={{ height: 6, borderRadius: 99, width: `${pctUsed * 100}%`, background: pctUsed > 0.85 ? C.red : pctUsed > 0.6 ? C.amber : car.color }} />
-                      </div>
-                    </div>
-                  )}
-                  {isExpired && <div style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>⚠ This term has expired</div>}
-                  {current.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Policy: {current.notes}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
 
       <div style={S.card}>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>Mileage — Last 12 Weeks</div>
