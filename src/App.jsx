@@ -628,16 +628,26 @@ function DocForm({ form, setForm, cars, syncing, uploading, onSave, onCancel, ed
           </select>
         </div>
       </div>
+      {form.type && form.type.includes("Insurance") && (
+        <div style={{ ...S.row, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}><label style={S.label}>Start Date</label>
+            <input type="date" style={S.input} value={form.start_date || ""} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+          </div>
+          <div style={{ flex: 1 }}><label style={S.label}>Insurer</label>
+            <input style={S.input} placeholder="e.g. Alliance Insurance" value={form.insurer || ""} onChange={e => setForm(f => ({ ...f, insurer: e.target.value }))} />
+          </div>
+        </div>
+      )}
       <div style={{ ...S.row, marginBottom: 12 }}>
         <div style={{ flex: 1 }}><label style={S.label}>Expiry Date</label>
           <input type="date" style={S.input} value={form.expiry} onChange={e => setForm(f => ({ ...f, expiry: e.target.value }))} />
         </div>
-        <div style={{ flex: 1 }}><label style={S.label}>Notes</label>
-          <input style={S.input} placeholder="policy number, etc." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+        <div style={{ flex: 1 }}><label style={S.label}>{form.type && form.type.includes("Insurance") ? "Policy Number" : "Notes"}</label>
+          <input style={S.input} placeholder={form.type && form.type.includes("Insurance") ? "e.g. 151/070/1/025692" : "notes..."} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
         </div>
       </div>
       <div style={{ marginBottom: 12 }}>
-        <label style={S.label}>Amount Paid (USD)</label>
+        <label style={S.label}>Premium / Amount Paid (USD)</label>
         <input type="number" min="0" step="0.01" style={S.input} placeholder="e.g. 120.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
       </div>
       {form.expiry && (() => { const st = docStatus(form.expiry); return <div style={{ background: C.faint, borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: st.color, fontWeight: 600 }}>{st.label}</div>; })()}
@@ -1371,6 +1381,68 @@ function Dashboard({ cars, weeks, costs, incidents, docs, movements, allAlerts, 
         </div>
       )}
 
+      {/* Insurance Cost Summary */}
+      {(() => {
+        const insuranceDocs = docs.filter(d => d.type && d.type.includes("Insurance"));
+        if (insuranceDocs.length === 0) return null;
+        const insCarStats = cars.map(car => {
+          const carIns = insuranceDocs
+            .filter(d => d.car_id === car.id)
+            .sort((a, b) => new Date(b.expiry) - new Date(a.expiry));
+          const current = carIns[0];
+          if (!current) return null;
+          const startD = current.start_date ? new Date(current.start_date) : null;
+          const expiryD = new Date(current.expiry);
+          const today_ = new Date();
+          const weeksInTerm = startD ? Math.round((expiryD - startD) / (7 * 24 * 3600 * 1000)) : null;
+          const weeksPassed = startD ? Math.max(0, Math.round((Math.min(today_, expiryD) - startD) / (7 * 24 * 3600 * 1000))) : null;
+          const weeksRemaining = weeksInTerm && weeksPassed != null ? Math.max(0, weeksInTerm - weeksPassed) : null;
+          const costPerWeek = (weeksInTerm && current.amount) ? (Number(current.amount) / weeksInTerm) : null;
+          const pctUsed = (weeksInTerm && weeksPassed != null) ? Math.min(1, weeksPassed / weeksInTerm) : null;
+          const isExpired = expiryD < today_;
+          const fmtD = d => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          return { car, current, startD, expiryD, weeksInTerm, weeksPassed, weeksRemaining, costPerWeek, pctUsed, isExpired, fmtD };
+        }).filter(Boolean);
+        if (insCarStats.length === 0) return null;
+        return (
+          <div style={{ ...S.card, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>🛡️</span><span>Insurance Cost Summary</span>
+              <span style={{ fontSize: 10, color: C.muted, marginLeft: "auto" }}>Current term per vehicle</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {insCarStats.map(({ car, current, startD, expiryD, weeksInTerm, weeksPassed, weeksRemaining, costPerWeek, pctUsed, isExpired, fmtD }) => (
+                <div key={car.id} style={{ borderLeft: `3px solid ${car.color}`, paddingLeft: 12 }}>
+                  <div style={{ fontWeight: 700, color: car.color, fontSize: 13, marginBottom: 6 }}>{car.name}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "6px 14px", marginBottom: 8, fontSize: 12 }}>
+                    {startD && <div><span style={{ color: C.muted }}>Term: </span><span style={{ fontWeight: 600 }}>{fmtD(startD)} → {fmtD(expiryD)}</span></div>}
+                    {!startD && <div><span style={{ color: C.muted }}>Expires: </span><span style={{ fontWeight: 600 }}>{fmtD(expiryD)}</span></div>}
+                    {current.insurer && <div><span style={{ color: C.muted }}>Insurer: </span><span style={{ fontWeight: 600 }}>{current.insurer}</span></div>}
+                    {current.amount != null && <div><span style={{ color: C.muted }}>Premium: </span><span style={{ fontWeight: 700, color: C.green }}>${Number(current.amount).toFixed(2)}</span></div>}
+                    {weeksInTerm && <div><span style={{ color: C.muted }}>Total weeks: </span><span style={{ fontWeight: 600 }}>{weeksInTerm} wks</span></div>}
+                    {costPerWeek && <div><span style={{ color: C.muted }}>Cost/week: </span><span style={{ fontWeight: 700, color: C.amber }}>${costPerWeek.toFixed(2)}/wk</span></div>}
+                    {weeksPassed != null && !isExpired && <div><span style={{ color: C.muted }}>Weeks used: </span><span style={{ fontWeight: 600 }}>{weeksPassed} wks</span></div>}
+                    {weeksRemaining != null && !isExpired && <div><span style={{ color: C.muted }}>Weeks left: </span><span style={{ fontWeight: 600, color: weeksRemaining <= 4 ? C.red : weeksRemaining <= 8 ? C.amber : C.green }}>{weeksRemaining} wks</span></div>}
+                  </div>
+                  {pctUsed != null && !isExpired && (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.muted, marginBottom: 3 }}>
+                        <span>Term progress</span><span>{Math.round(pctUsed * 100)}% used</span>
+                      </div>
+                      <div style={{ height: 6, background: C.border, borderRadius: 99 }}>
+                        <div style={{ height: 6, borderRadius: 99, width: `${pctUsed * 100}%`, background: pctUsed > 0.85 ? C.red : pctUsed > 0.6 ? C.amber : car.color }} />
+                      </div>
+                    </div>
+                  )}
+                  {isExpired && <div style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>⚠ This term has expired</div>}
+                  {current.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Policy: {current.notes}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={S.card}>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>Mileage — Last 12 Weeks</div>
         <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Always shows recent trend regardless of month selected above</div>
@@ -1933,14 +2005,27 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
                   </summary>
                   {/* Expanded detail panel for current record */}
                   <div style={{ background: C.bg, borderLeft: `4px solid ${st.color}`, padding: "14px 14px 10px" }}>
+                    {(() => {
+                      const isInsurance = type.includes("Insurance");
+                      const startD = current.start_date ? new Date(current.start_date) : null;
+                      const expiryD = new Date(current.expiry);
+                      const weeksInTerm = startD ? Math.round((expiryD - startD) / (7 * 24 * 3600 * 1000)) : null;
+                      const costPerWeek = (weeksInTerm && current.amount) ? (Number(current.amount) / weeksInTerm) : null;
+                      return (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px", marginBottom: 12 }}>
                       <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Type</div><div style={{ fontWeight: 600, fontSize: 13 }}>{type}</div></div>
                       <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Status</div><div style={{ fontWeight: 700, fontSize: 13, color: st.color }}>{st.label}</div></div>
+                      {isInsurance && current.start_date && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Start Date</div><div style={{ fontWeight: 600, fontSize: 13 }}>{fmtDate(current.start_date)}</div></div>}
                       <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Expiry Date</div><div style={{ fontWeight: 600, fontSize: 13 }}>{fmtDate(current.expiry)}</div></div>
+                      {isInsurance && current.insurer && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Insurer</div><div style={{ fontWeight: 600, fontSize: 13 }}>{current.insurer}</div></div>}
                       <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Vehicle</div><div style={{ fontWeight: 600, fontSize: 13, color: car.color }}>{car.name}</div></div>
-                      {current.amount != null && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Amount Paid</div><div style={{ fontWeight: 700, fontSize: 14, color: C.green }}>${Number(current.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>}
-                      {current.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Notes / Policy No.</div><div style={{ fontWeight: 600, fontSize: 13 }}>{current.notes}</div></div>}
+                      {current.amount != null && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{isInsurance ? "Premium Paid" : "Amount Paid"}</div><div style={{ fontWeight: 700, fontSize: 14, color: C.green }}>${Number(current.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>}
+                      {isInsurance && weeksInTerm && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Weeks in Term</div><div style={{ fontWeight: 600, fontSize: 13 }}>{weeksInTerm} wks</div></div>}
+                      {isInsurance && costPerWeek && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Cost / Week</div><div style={{ fontWeight: 700, fontSize: 13, color: C.amber }}>${costPerWeek.toFixed(2)}/wk</div></div>}
+                      {current.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{isInsurance ? "Policy Number" : "Notes"}</div><div style={{ fontWeight: 600, fontSize: 13 }}>{current.notes}</div></div>}
                     </div>
+                      );
+                    })()}
                     {current.photo_url && (
                       <a href={current.photo_url} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: 12 }}>
                         <img src={current.photo_url} alt="Licence disc" style={{ width: "100%", maxWidth: 260, borderRadius: 8, border: `1px solid ${C.border}`, display: "block" }} />
@@ -1974,12 +2059,25 @@ function Docs({ docs, cars, del, setDocs, showForm, setShowForm, form, setForm, 
                             </div>
                           </summary>
                           <div style={{ background: C.bg, borderRadius: "0 0 7px 7px", padding: "12px 12px 10px", borderLeft: `3px solid ${C.border}` }}>
+                            {(() => {
+                              const isInsurance = type.includes("Insurance");
+                              const startD = d.start_date ? new Date(d.start_date) : null;
+                              const expiryD = new Date(d.expiry);
+                              const weeksInTerm = startD ? Math.round((expiryD - startD) / (7 * 24 * 3600 * 1000)) : null;
+                              const costPerWeek = (weeksInTerm && d.amount) ? (Number(d.amount) / weeksInTerm) : null;
+                              return (
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px", marginBottom: 10 }}>
+                              {isInsurance && d.start_date && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Start Date</div><div style={{ fontSize: 12, fontWeight: 600 }}>{fmtDate(d.start_date)}</div></div>}
                               <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Expiry</div><div style={{ fontSize: 12, fontWeight: 600 }}>{fmtDate(d.expiry)}</div></div>
                               <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Superseded by</div><div style={{ fontSize: 12, fontWeight: 600 }}>{fmtDate(nextExpiry)}</div></div>
-                              {d.amount != null && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Amount Paid</div><div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>${Number(d.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>}
-                              {d.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Notes</div><div style={{ fontSize: 12 }}>{d.notes}</div></div>}
+                              {isInsurance && d.insurer && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Insurer</div><div style={{ fontSize: 12, fontWeight: 600 }}>{d.insurer}</div></div>}
+                              {d.amount != null && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{isInsurance ? "Premium Paid" : "Amount Paid"}</div><div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>${Number(d.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>}
+                              {isInsurance && weeksInTerm && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Weeks in Term</div><div style={{ fontSize: 12, fontWeight: 600 }}>{weeksInTerm} wks</div></div>}
+                              {isInsurance && costPerWeek && <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>Cost / Week</div><div style={{ fontSize: 12, fontWeight: 700, color: C.amber }}>${costPerWeek.toFixed(2)}/wk</div></div>}
+                              {d.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{isInsurance ? "Policy Number" : "Notes"}</div><div style={{ fontSize: 12 }}>{d.notes}</div></div>}
                             </div>
+                              );
+                            })()}
                             {d.photo_url && (
                               <a href={d.photo_url} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: 10 }}>
                                 <img src={d.photo_url} alt="Disc" style={{ width: "100%", maxWidth: 220, borderRadius: 7, border: `1px solid ${C.border}`, display: "block" }} />
@@ -2469,7 +2567,7 @@ function AppInner({ session }) {
 
   const blankDaily = () => ({ carId: cars[0]?.id || "", weekStart: getMondayStr(), weekEnd: getSundayStr(getMondayStr()), entryMode: "daily", totalKm: "", days: Array(7).fill(""), amount: "", paid: true, notes: "" });
   const blankCost = { carId: cars[0]?.id || "", date: today(), amount: "", category: "Service & Insurance", notes: "" };
-  const blankDoc = { carId: cars[0]?.id || "", type: DOC_TYPES[0], expiry: "", notes: "", amount: "" };
+  const blankDoc = { carId: cars[0]?.id || "", type: DOC_TYPES[0], expiry: "", start_date: "", insurer: "", notes: "", amount: "" };
 
   const [wForm, setWForm] = useState(blankDaily);
   const [editingWeekId, setEditingWeekId] = useState(null);
@@ -2817,7 +2915,7 @@ function AppInner({ session }) {
 
   function startEditDoc(doc) {
     setEditingDocId(doc.id);
-    setDocForm({ carId: doc.car_id, type: doc.type, expiry: doc.expiry, notes: doc.notes || "", amount: doc.amount || "", photoFile: null, photoPreview: doc.photo_url || null });
+    setDocForm({ carId: doc.car_id, type: doc.type, expiry: doc.expiry, start_date: doc.start_date || "", insurer: doc.insurer || "", notes: doc.notes || "", amount: doc.amount || "", photoFile: null, photoPreview: doc.photo_url || null });
     setShowDocForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -2844,7 +2942,7 @@ function AppInner({ session }) {
       }
     }
     if (editingDocId) {
-      const updates = { car_id: docForm.carId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, amount: docForm.amount ? Number(docForm.amount) : null, photo_url: photoUrl };
+      const updates = { car_id: docForm.carId, type: docForm.type, expiry: docForm.expiry, start_date: docForm.start_date || null, insurer: docForm.insurer || null, notes: docForm.notes, amount: docForm.amount ? Number(docForm.amount) : null, photo_url: photoUrl };
       const { data, error } = await supabase.from("docs").update(updates).eq("id", editingDocId).select().single();
       if (!error) {
         setDocs(d => d.map(x => x.id === editingDocId ? data : x).sort((a, b) => new Date(a.expiry) - new Date(b.expiry)));
@@ -2852,7 +2950,7 @@ function AppInner({ session }) {
         cancelDocForm();
       } else toast_("Error saving");
     } else {
-      const row = { car_id: docForm.carId, user_id: userId, type: docForm.type, expiry: docForm.expiry, notes: docForm.notes, amount: docForm.amount ? Number(docForm.amount) : null, photo_url: photoUrl };
+      const row = { car_id: docForm.carId, user_id: userId, type: docForm.type, expiry: docForm.expiry, start_date: docForm.start_date || null, insurer: docForm.insurer || null, notes: docForm.notes, amount: docForm.amount ? Number(docForm.amount) : null, photo_url: photoUrl };
       const { data, error } = await supabase.from("docs").insert(row).select().single();
       if (!error) {
         setDocs(d => [...d, data].sort((a, b) => new Date(a.expiry) - new Date(b.expiry)));
