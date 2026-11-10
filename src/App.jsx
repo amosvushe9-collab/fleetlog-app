@@ -168,7 +168,6 @@ const INCIDENT_STATUSES = ["Quoted", "Approved", "In Repair", "Done"];
 function DEFAULT_ALERTS() {
   return [
     { id: uid(), label: "Oil & Filter", intervalKm: 10000, lastDoneKm: 0 },
-    { id: uid(), label: "Tyre Rotation", intervalKm: 10000, lastDoneKm: 0 },
   ];
 }
 
